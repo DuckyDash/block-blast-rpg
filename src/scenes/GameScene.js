@@ -454,7 +454,10 @@ export class GameScene extends Phaser.Scene {
         this.spawnTray();
         this.drawTray();
         this._setMsg("Blok baru! Seret ke grid.");
+        this._checkLooseCondition(); // Check loose condition after spawning new tray
       });
+    } else {
+      this._checkLooseCondition(); // Check loose condition after placing a piece
     }
   }
 
@@ -612,5 +615,25 @@ export class GameScene extends Phaser.Scene {
 
   _setMsg(t) {
     if (this.msgText) this.msgText.setText(t);
+  }
+
+  // Check if no blocks can be placed on the grid
+  _checkLooseCondition() {
+    const canPlaceAny = this.trayPieces.some((piece) => {
+      if (piece.used) return false;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (canPlace(this.grid, piece.shape, r, c, ROWS, COLS)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+
+    if (!canPlaceAny) {
+      this._setMsg("Tidak ada langkah yang tersedia. Game Over!");
+      this._endGame(false);
+    }
   }
 }

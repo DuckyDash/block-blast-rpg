@@ -19,7 +19,7 @@ export const TRAY_Y     = 535
 export const HUD_CARD_Y = 8
 
 // Battle
-export const MAX_HP          = 100
+export const MAX_HP          = 20000
 export const ENEMY_ATTACK_MS = 4000
 export const ENEMY_DMG_MIN   = 8
 export const ENEMY_DMG_MAX   = 14

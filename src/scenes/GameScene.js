@@ -56,11 +56,12 @@ export class GameScene extends Phaser.Scene {
     this.drawGrid();
     this.spawnTray();
     this.drawTray();
+    this._createSettingsButton();
   }
 
   update() {
     // Kalau sedang drag: gambar ghost piece di posisi jari
-    if (this.dragging) {
+    if (this.dragging && !this.isPaused) {
       this._updateDragGhost();
     }
   }
@@ -74,6 +75,8 @@ export class GameScene extends Phaser.Scene {
     this.trayPieces = [];
     this.gameOver = false;
     this.isClearing = false;
+    this.isPaused = false;
+    this.pauseMenuObjects = [];
 
     // Drag state
     this.dragging = false;
@@ -88,6 +91,7 @@ export class GameScene extends Phaser.Scene {
     this.trayGfx = this.add.graphics();
     this.ghostGfx = this.add.graphics().setDepth(20); // ghost ngambang di atas semua
     this.uiGfx = this.add.graphics();
+    this.pauseGfx = this.add.graphics().setDepth(30); // pause menu graphics
   }
 
   _initTexts() {
@@ -359,7 +363,7 @@ export class GameScene extends Phaser.Scene {
   // ── Input ──────────────────────────────────────────────────────────────────
 
   _onPointerDown(ptr) {
-    if (this.gameOver || this.isClearing || this.dragging) return;
+    if (this.gameOver || this.isClearing || this.dragging || this.isPaused) return;
     const { x, y } = ptr;
 
     // Cek apakah jari menyentuh salah satu slot tray
@@ -454,7 +458,10 @@ export class GameScene extends Phaser.Scene {
         this.spawnTray();
         this.drawTray();
         this._setMsg("Blok baru! Seret ke grid.");
+        this._checkLooseCondition(); // Check loose condition after spawning new tray
       });
+    } else {
+      this._checkLooseCondition(); // Check loose condition after placing a piece
     }
   }
 
@@ -612,5 +619,239 @@ export class GameScene extends Phaser.Scene {
 
   _setMsg(t) {
     if (this.msgText) this.msgText.setText(t);
+  }
+
+  // Check if no blocks can be placed on the grid
+  _checkLooseCondition() {
+    const canPlaceAny = this.trayPieces.some((piece) => {
+      if (piece.used) return false;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (canPlace(this.grid, piece.shape, r, c, ROWS, COLS)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+
+    if (!canPlaceAny) {
+      this._setMsg("Tidak ada langkah yang tersedia. Game Over!");
+      this._endGame(false);
+    }
+  }
+
+  // ── Pause Menu ─────────────────────────────────────────────────────────────
+
+  _createSettingsButton() {
+    const btnW = 50;
+    const btnH = 50;
+    const btnX = GAME_W - 35;
+    const btnY = 35;
+
+    const btnGfx = this.add.graphics().setDepth(15);
+    btnGfx.fillStyle(0x6366f1);
+    btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
+
+    const btnText = this.add
+      .text(btnX, btnY, "⚙", { fontSize: "24px" })
+      .setOrigin(0.5)
+      .setDepth(15)
+      .setInteractive({ useHandCursor: true });
+
+    const hitArea = new Phaser.Geom.Rectangle(
+      btnX - btnW / 2,
+      btnY - btnH / 2,
+      btnW,
+      btnH,
+    );
+    btnGfx.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+
+    const hoverHandler = () => {
+      btnGfx.clear();
+      btnGfx.fillStyle(0xffffff, 0.15);
+      btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
+      btnGfx.fillStyle(0x6366f1);
+      btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
+    };
+
+    const outHandler = () => {
+      btnGfx.clear();
+      btnGfx.fillStyle(0x6366f1);
+      btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
+    };
+
+    btnText.on("pointerover", hoverHandler);
+    btnText.on("pointerout", outHandler);
+    btnGfx.on("pointerover", hoverHandler);
+    btnGfx.on("pointerout", outHandler);
+
+    btnText.on("pointerdown", () => this._togglePauseMenu());
+    btnGfx.on("pointerdown", () => this._togglePauseMenu());
+
+    this.settingsBtn = { gfx: btnGfx, text: btnText };
+  }
+
+  _togglePauseMenu() {
+    if (this.gameOver || this.isClearing) return;
+
+    this.isPaused = !this.isPaused;
+
+    if (this.isPaused) {
+      this.enemyTimer.paused = true;
+      this._drawPauseMenu();
+    } else {
+      this.enemyTimer.paused = false;
+      this._closePauseMenu();
+      this._setMsg("Melanjutkan permainan...");
+    }
+  }
+
+  _closePauseMenu() {
+    // Destroy all pause menu objects
+    this.pauseMenuObjects.forEach((obj) => {
+      if (obj && obj.destroy) obj.destroy();
+    });
+    this.pauseMenuObjects = [];
+    this.pauseGfx.clear();
+  }
+
+  _drawPauseMenu() {
+    // Clear previous pause menu objects
+    this.pauseMenuObjects.forEach((obj) => {
+      if (obj && obj.destroy) obj.destroy();
+    });
+    this.pauseMenuObjects = [];
+
+    const g = this.pauseGfx;
+    g.clear();
+
+    // Semi-transparent overlay
+    g.fillStyle(0x000000, 0.7);
+    g.fillRect(0, 0, GAME_W, GAME_H);
+
+    // Menu panel
+    const panelW = 280;
+    const panelH = 280;
+    const panelX = GAME_W / 2 - panelW / 2;
+    const panelY = GAME_H / 2 - panelH / 2;
+
+    g.fillStyle(0x1a1a2e);
+    g.fillRoundedRect(panelX, panelY, panelW, panelH, 12);
+    g.lineStyle(2, 0x6366f1);
+    g.strokeRoundedRect(panelX, panelY, panelW, panelH, 12);
+
+    // Title
+    const title = this.add
+      .text(GAME_W / 2, panelY + 25, "PAUSED", {
+        fontSize: "24px",
+        fontStyle: "bold",
+        color: "#fde047",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(31);
+    this.pauseMenuObjects.push(title);
+
+    // Menu buttons
+    const btnY = panelY + 70;
+    const btnW = 240;
+    const btnH = 40;
+    const btnGap = 50;
+
+    this._createPauseMenuButton(
+      GAME_W / 2,
+      btnY,
+      btnW,
+      btnH,
+      "Resume",
+      0x4ade80,
+      () => this._togglePauseMenu(),
+    );
+
+    this._createPauseMenuButton(
+      GAME_W / 2,
+      btnY + btnGap,
+      btnW,
+      btnH,
+      "Restart",
+      0xf59e0b,
+      () => {
+        this._closePauseMenu();
+        this.scene.restart();
+      },
+    );
+
+    this._createPauseMenuButton(
+      GAME_W / 2,
+      btnY + btnGap * 2,
+      btnW,
+      btnH,
+      "Quit to Menu",
+      0xef4444,
+      () => {
+        this._closePauseMenu();
+        this.scene.start("MenuScene");
+      },
+    );
+
+    this._createPauseMenuButton(
+      GAME_W / 2,
+      btnY + btnGap * 3,
+      btnW,
+      btnH,
+      "Quit Game",
+      0x8b5cf6,
+      () => {
+        this._closePauseMenu();
+        this.game.destroy(true);
+      },
+    );
+  }
+
+  _createPauseMenuButton(x, y, w, h, label, color, callback) {
+    const btnGfx = this.add.graphics().setDepth(31);
+    btnGfx.fillStyle(color);
+    btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
+
+    const btnText = this.add
+      .text(x, y, label, {
+        fontSize: "14px",
+        fontStyle: "bold",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5)
+      .setDepth(32)
+      .setInteractive({ useHandCursor: true });
+
+    // Store references
+    this.pauseMenuObjects.push(btnGfx);
+    this.pauseMenuObjects.push(btnText);
+
+    const hitArea = new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h);
+    btnGfx.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+
+    const hoverHandler = () => {
+      btnGfx.clear();
+      btnGfx.fillStyle(0xffffff, 0.2);
+      btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
+      btnGfx.fillStyle(color);
+      btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
+    };
+
+    const outHandler = () => {
+      btnGfx.clear();
+      btnGfx.fillStyle(color);
+      btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
+    };
+
+    btnText.on("pointerover", hoverHandler);
+    btnText.on("pointerout", outHandler);
+    btnGfx.on("pointerover", hoverHandler);
+    btnGfx.on("pointerout", outHandler);
+
+    btnText.on("pointerdown", callback);
+    btnGfx.on("pointerdown", callback);
   }
 }

@@ -12,10 +12,17 @@ import {
   TRAY_Y,
   HUD_CARD_Y,
   MAX_HP,
-  ENEMY_ATTACK_MS,
-  ENEMY_DMG_MIN,
-  ENEMY_DMG_MAX,
 } from "../config/constants.js";
+import {
+  ENEMY_TEMPLATES,
+  DEFAULT_WAVE_IDS,
+  createRandomWaves,
+} from "../config/enemies.js";
+import {
+  POWERUP_TEMPLATES,
+  randPowerupId,
+  POWERUP_SPAWN_DELAY_MS,
+} from "../config/powerups.js";
 import {
   randShape,
   randPieceColor,
@@ -23,6 +30,7 @@ import {
   canPlace,
   findFullLines,
   clearLines,
+  randFrom,
 } from "../utils/helpers.js";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -51,11 +59,14 @@ export class GameScene extends Phaser.Scene {
     this._initTexts();
     this._initInput();
     this._initEnemyTimer();
+    this._spawnNextEnemy();
     this.drawBackground();
     this.drawHUD();
     this.drawGrid();
     this.spawnTray();
     this.drawTray();
+    this._schedulePowerupSpawn();
+    this._updatePowerupUI();
   }
 
   update() {
@@ -74,6 +85,23 @@ export class GameScene extends Phaser.Scene {
     this.trayPieces = [];
     this.gameOver = false;
     this.isClearing = false;
+    this.waveIndex = 0;
+    this.useRandomWaves = window.location.search.includes("random");
+    this.waves = this.useRandomWaves ? createRandomWaves() : DEFAULT_WAVE_IDS;
+    this.activeEnemy = null;
+    this.powerupInventory = {};
+    this.activePowerups = {
+      ward: false,
+      ironWill: false,
+      freeze: false,
+      clarity: false,
+    };
+    this.bonusEffects = {
+      comboSurge: 0,
+      soulBurst: false,
+      bloodPact: false,
+    };
+    this.clarityHint = null;
 
     // Drag state
     this.dragging = false;
@@ -88,6 +116,7 @@ export class GameScene extends Phaser.Scene {
     this.trayGfx = this.add.graphics();
     this.ghostGfx = this.add.graphics().setDepth(20); // ghost ngambang di atas semua
     this.uiGfx = this.add.graphics();
+    this.powerupLabelGroup = this.add.group();
   }
 
   _initTexts() {
@@ -142,7 +171,7 @@ export class GameScene extends Phaser.Scene {
     this.comboText = this.add
       .text(GAME_W / 2, GRID_Y + (ROWS * (CELL + GAP)) / 2, "", {
         fontSize: "28px",
-        fontStyle: "bold",
+        fontStyle: "bold",a
         color: "#fde047",
         stroke: "#000000",
         strokeThickness: 5,
@@ -161,8 +190,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   _initEnemyTimer() {
+    this.enemyTimer = null;
+  }
+
+  _startEnemyTimer(delay) {
+    if (this.enemyTimer) this.enemyTimer.remove();
     this.enemyTimer = this.time.addEvent({
-      delay: ENEMY_ATTACK_MS,
+      delay,
       callback: this._enemyAttack,
       callbackScope: this,
       loop: true,
@@ -221,7 +255,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(pPct > 0.5 ? 0x4ade80 : pPct > 0.25 ? 0xf59e0b : 0xef4444);
     if (pPct > 0) g.fillRoundedRect(bx1, barY, barW * pPct, barH, 4);
 
-    const ePct = Math.max(0, this.enemyHP / MAX_HP);
+    const ePct = this.activeEnemy ? Math.max(0, this.enemyHP / this.activeEnemy.hp) : 0;
     g.fillStyle(0xf87171);
     if (ePct > 0) g.fillRoundedRect(bx2, barY, barW * ePct, barH, 4);
 
@@ -232,25 +266,52 @@ export class GameScene extends Phaser.Scene {
   // ── Draw: Grid ─────────────────────────────────────────────────────────────
 
   drawGrid() {
+    this.powerupLabelGroup.clear(true, true);
     const g = this.gridGfx;
     g.clear();
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const x = GRID_X + c * (CELL + GAP);
         const y = GRID_Y + r * (CELL + GAP);
-        const col = this.grid[r][c];
+        const cell = this.grid[r][c];
+        const col = cell?.color ?? cell;
         if (col !== null) {
           g.fillStyle(col);
           g.fillRoundedRect(x, y, CELL, CELL, 4);
-          g.fillStyle(0xffffff, 0.18);
-          g.fillRoundedRect(x + 3, y + 3, CELL - 6, 5, 2);
+          if (cell?.corrupted) {
+            g.lineStyle(2, 0xef4444);
+            g.strokeRoundedRect(x + 2, y + 2, CELL - 4, CELL - 4, 4);
+          } else {
+            g.fillStyle(0xffffff, 0.18);
+            g.fillRoundedRect(x + 3, y + 3, CELL - 6, 5, 2);
+          }
         } else {
           g.fillStyle(0x252540);
           g.fillRoundedRect(x, y, CELL, CELL, 4);
           g.lineStyle(1, 0x2a2a4a);
           g.strokeRoundedRect(x, y, CELL, CELL, 4);
         }
+
+        if (cell?.powerup) {
+          const icon = POWERUP_TEMPLATES[cell.powerup]?.icon || "*";
+          this.powerupLabelGroup.add(
+            this.add
+              .text(x + CELL / 2, y + CELL / 2, icon, {
+                fontSize: "16px",
+                color: "#ffffff",
+              })
+              .setOrigin(0.5)
+              .setDepth(10),
+          );
+        }
       }
+    }
+
+    if (this.clarityHint) {
+      const x = GRID_X + this.clarityHint.c * (CELL + GAP);
+      const y = GRID_Y + this.clarityHint.r * (CELL + GAP);
+      g.lineStyle(2, 0x60a5fa, 0.9);
+      g.strokeRoundedRect(x + 2, y + 2, CELL - 4, CELL - 4, 4);
     }
   }
 
@@ -462,16 +523,373 @@ export class GameScene extends Phaser.Scene {
     const { fullRows, fullCols } = findFullLines(this.grid, ROWS, COLS);
     const total = fullRows.length + fullCols.length;
     if (!total) return;
+
+    const linePowerups = this._collectPowerupsFromLines(fullRows, fullCols);
     this.isClearing = true;
     this._flashLines(fullRows, fullCols, () => {
+      this._resolveLinePowerups(linePowerups);
       clearLines(this.grid, fullRows, fullCols);
       this.drawGrid();
-      const dmg = calcDamage(total);
+
+      let damageCombo = total + this.bonusEffects.comboSurge;
+      const baseDmg = calcDamage(damageCombo);
+      let dmg = baseDmg;
+
+      if (this.bonusEffects.soulBurst) {
+        dmg *= 2;
+        this._setMsg("Soul Burst! Combo hits all enemies.");
+        this.bonusEffects.soulBurst = false;
+      }
+
+      if (this.bonusEffects.bloodPact) {
+        dmg *= 2;
+        this.playerHP = Math.max(0, this.playerHP - 5);
+        this._setMsg("Blood Pact aktif! Damage ganda, -5 HP.");
+        this.bonusEffects.bloodPact = false;
+      }
+
+      this.bonusEffects.comboSurge = 0;
       this.enemyHP = Math.max(0, this.enemyHP - dmg);
       this.drawHUD();
       this._showCombo(total, dmg);
       this.isClearing = false;
-      if (this.enemyHP <= 0) this._endGame(true);
+      if (this.enemyHP <= 0) this._onEnemyDefeated();
+    });
+  }
+
+  _collectPowerupsFromLines(fullRows, fullCols) {
+    const ids = new Set();
+    for (const r of fullRows) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = this.grid[r][c];
+        if (cell?.powerup) ids.add(cell.powerup);
+      }
+    }
+    for (const c of fullCols) {
+      for (let r = 0; r < ROWS; r++) {
+        const cell = this.grid[r][c];
+        if (cell?.powerup) ids.add(cell.powerup);
+      }
+    }
+    return Array.from(ids);
+  }
+
+  _resolveLinePowerups(ids) {
+    ids.forEach((id) => {
+      const template = POWERUP_TEMPLATES[id];
+      if (!template) return;
+
+      if (template.trigger === "nextCombo") {
+        if (id === "comboSurge") this.bonusEffects.comboSurge += 1;
+        if (id === "soulBurst") this.bonusEffects.soulBurst = true;
+      } else if (template.trigger === "onPickup") {
+        this._activatePowerup(id);
+      } else if (template.trigger === "onMatch") {
+        this._activatePowerup(id);
+      } else if (template.trigger === "onEnemyAttack" || template.trigger === "manual" || template.trigger === "onLowHP") {
+        this._storePowerup(id);
+      }
+    });
+  }
+
+  _activatePowerup(id) {
+    const template = POWERUP_TEMPLATES[id];
+    if (!template) return;
+
+    switch (id) {
+      case "healShard":
+        this.playerHP = Math.min(MAX_HP, this.playerHP + template.amount);
+        this.drawHUD();
+        this._setMsg(`Heal Shard aktif! +${template.amount} HP.`);
+        break;
+      case "freeze":
+        if (this.enemyTimer && !this.activePowerups.freeze) {
+          this.enemyTimer.paused = true;
+          this.activePowerups.freeze = true;
+          this._setMsg("Freeze! Serangan musuh berhenti selama 8 detik.");
+          this.time.delayedCall(template.duration, () => {
+            if (this.enemyTimer) this.enemyTimer.paused = false;
+            this.activePowerups.freeze = false;
+            this._setMsg("Enemy attack resumes.");
+          });
+        }
+        break;
+      case "clarity":
+        this.clarityHint = this._findClarityHint();
+        this.activePowerups.clarity = true;
+        this._setMsg("Clarity siap — petunjuk ditempatkan pada grid.");
+        break;
+      case "darkVeil":
+        this._clearCorruptedBlocks();
+        this._setMsg("Dark Veil aktif — semua korupsi dibersihkan.");
+        break;
+      case "plagueToken":
+        this._applyPlagueToken();
+        break;
+      case "comboSurge":
+        this.bonusEffects.comboSurge += 1;
+        this._setMsg("Combo Surge aktif pada kombo ini.");
+        break;
+      case "soulBurst":
+        this.bonusEffects.soulBurst = true;
+        this._setMsg("Soul Burst siap pada kombo ini.");
+        break;
+      case "ironWill":
+      case "ward":
+      case "ignite":
+      case "bloodPact":
+        this._storePowerup(id);
+        break;
+      default:
+        break;
+    }
+  }
+
+  _storePowerup(id) {
+    this.powerupInventory[id] = (this.powerupInventory[id] || 0) + 1;
+    this._setMsg(`${POWERUP_TEMPLATES[id].name} ditambahkan ke koleksi.`);
+    this._updatePowerupUI();
+  }
+
+  _useStoredPowerup(id) {
+    if (!this.powerupInventory[id]) return;
+    this.powerupInventory[id] -= 1;
+    this._updatePowerupUI();
+
+    switch (id) {
+      case "ignite":
+        this._useIgnite();
+        break;
+      case "bloodPact":
+        this.bonusEffects.bloodPact = true;
+        this._setMsg("Blood Pact aktif: kombo berikutnya damage ganda.");
+        break;
+      case "ward":
+        this.activePowerups.ward = true;
+        this._setMsg("Ward siap: serangan musuh berikutnya akan diblokir.");
+        break;
+      case "ironWill":
+        if (this.playerHP / MAX_HP <= 0.25) {
+          this.activePowerups.ironWill = true;
+          this._setMsg("Iron Will aktif: incoming damage berkurang 50%.");
+        } else {
+          this._setMsg("Iron Will akan aktif saat HP di bawah 25%.");
+        }
+        break;
+      default:
+        this._setMsg(`${POWERUP_TEMPLATES[id].name} digunakan.`);
+        break;
+    }
+  }
+
+  _useIgnite() {
+    const counts = new Map();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = this.grid[r][c];
+        if (cell === null) continue;
+        const color = cell?.color ?? cell;
+        counts.set(color, (counts.get(color) || 0) + 1);
+      }
+    }
+    if (!counts.size) {
+      this._setMsg("Ignite gagal: tidak ada blok untuk dibersihkan.");
+      return;
+    }
+
+    let bestColor = null;
+    let bestCount = 0;
+    counts.forEach((count, color) => {
+      if (count > bestCount) {
+        bestCount = count;
+        bestColor = color;
+      }
+    });
+
+    let cleared = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = this.grid[r][c];
+        const color = cell?.color ?? cell;
+        if (color === bestColor) {
+          this.grid[r][c] = null;
+          cleared += 1;
+        }
+      }
+    }
+    this.drawGrid();
+    this._setMsg(`Ignite membersihkan ${cleared} blok warna terbanyak.`);
+  }
+
+  _schedulePowerupSpawn() {
+    if (this.powerupTextObjects.length) {
+      this.powerupTextObjects.forEach((text) => text.destroy());
+      this.powerupTextObjects = [];
+    }
+
+    const inventoryIds = Object.keys(this.powerupInventory).filter(
+      (id) => this.powerupInventory[id] > 0,
+    );
+
+    if (inventoryIds.length === 0) {
+      this.powerupInfo.setText("Powerups: none");
+      return;
+    }
+
+    this.powerupInfo.setText("Powerups: tap untuk gunakan");
+
+    let x = 10;
+    inventoryIds.forEach((id) => {
+      const count = this.powerupInventory[id];
+      const text = this.add
+        .text(x, GAME_H - 24, `${POWERUP_TEMPLATES[id].icon} ${count}`, {
+          fontSize: "12px",
+          color: "#ffffff",
+          backgroundColor: "#1f2937",
+          padding: { x: 6, y: 4 },
+        })
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this._useStoredPowerup(id));
+      this.powerupTextObjects.push(text);
+      x += text.width + 8;
+    });
+  }
+
+  _schedulePowerupSpawn() {
+    const delay = Phaser.Math.Between(
+      POWERUP_SPAWN_DELAY_MS.min,
+      POWERUP_SPAWN_DELAY_MS.max,
+    );
+    this.time.delayedCall(delay, () => {
+      this._spawnRandomPowerupBlock();
+      this._schedulePowerupSpawn();
+    });
+  }
+
+  _updatePowerupUI() {
+    // UI displayed on grid blocks only
+  }
+
+  _spawnRandomPowerupBlock() {
+    const emptyCells = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (this.grid[r][c] === null) emptyCells.push({ r, c });
+      }
+    }
+    if (!emptyCells.length) return;
+
+    const position = randFrom(emptyCells);
+    const powerupId = randPowerupId();
+    this.grid[position.r][position.c] = {
+      color: randPieceColor(),
+      powerup: powerupId,
+    };
+    this.drawGrid();
+    this._setMsg(`${POWERUP_TEMPLATES[powerupId].name} block muncul di papan!`);
+  }
+
+  _findClarityHint() {
+    let best = null;
+    let bestScore = -1;
+
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (this.grid[r][c] !== null) continue;
+        let score = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+              if (this.grid[nr][nc] !== null) score += 1;
+            }
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = { r, c };
+        }
+      }
+    }
+    return best;
+  }
+
+  _applyPlagueToken() {
+    this.playerHP = Math.max(0, this.playerHP - POWERUP_TEMPLATES.plagueToken.amount);
+    this.drawHUD();
+    const corrupted = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = this.grid[r][c];
+        if (cell !== null && !cell?.corrupted) corrupted.push({ r, c });
+      }
+    }
+    if (corrupted.length) {
+      for (let i = 0; i < 3 && corrupted.length; i++) {
+        const idx = Math.floor(Math.random() * corrupted.length);
+        const pos = corrupted.splice(idx, 1)[0];
+        const cell = this.grid[pos.r][pos.c];
+        if (typeof cell === "object") {
+          cell.corrupted = true;
+        } else {
+          this.grid[pos.r][pos.c] = { color: cell, corrupted: true };
+        }
+      }
+      this.drawGrid();
+    }
+    this._setMsg("Plague Token: 3 blok terkorupsi, -5 HP.");
+  }
+
+  _clearCorruptedBlocks() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = this.grid[r][c];
+        if (cell?.corrupted) {
+          this.grid[r][c] = { color: cell.color, powerup: cell.powerup };
+        }
+      }
+    }
+    this.drawGrid();
+  }
+
+  _spawnNextEnemy() {
+    if (this.waveIndex >= this.waves.length) {
+      this._endGame(true);
+      return;
+    }
+
+    const nextId = this.waves[this.waveIndex];
+    const template = ENEMY_TEMPLATES[nextId] || ENEMY_TEMPLATES.goblin;
+    this.activeEnemy = { ...template };
+    this.enemyHP = template.hp;
+    this.hudTexts.enemyName.setText(
+      `${template.name} (Wave ${this.waveIndex + 1}/${this.waves.length})`,
+    );
+    this.hudTexts.enemyAv.setText(template.icon);
+    this.drawHUD();
+    this._setMsg(
+      `Wave ${this.waveIndex + 1}: ${template.name} muncul! ${template.boardEffect}`,
+    );
+    this._startEnemyTimer(template.attackInterval);
+  }
+
+  _onEnemyDefeated() {
+    if (this.gameOver || !this.activeEnemy) return;
+
+    const defeated = this.activeEnemy;
+    if (this.enemyTimer) this.enemyTimer.remove();
+    this._setMsg(`${defeated.name} dikalahkan! ${defeated.onDefeat}`);
+    this.activeEnemy = null;
+    this.waveIndex += 1;
+
+    this.time.delayedCall(900, () => {
+      if (this.waveIndex >= this.waves.length) {
+        this._endGame(true);
+      } else {
+        this._spawnNextEnemy();
+      }
     });
   }
 
@@ -538,13 +956,46 @@ export class GameScene extends Phaser.Scene {
   }
 
   _enemyAttack() {
-    if (this.gameOver) return;
-    const dmg =
-      ENEMY_DMG_MIN +
-      Math.floor(Math.random() * (ENEMY_DMG_MAX - ENEMY_DMG_MIN + 1));
+    if (this.gameOver || !this.activeEnemy) return;
+
+    if (this.activePowerups.ward) {
+      this.activePowerups.ward = false;
+      this._setMsg(`${this.activeEnemy.name}'s attack diblokir oleh Ward!`);
+      this._updatePowerupUI();
+      return;
+    }
+
+    let dmg = this.activeEnemy.dmg;
+
+    if (
+      this.powerupInventory.ward > 0 &&
+      !this.activePowerups.ward
+    ) {
+      this.powerupInventory.ward -= 1;
+      this.activePowerups.ward = true;
+      this._updatePowerupUI();
+      this._setMsg("Ward siap pada serangan berikutnya.");
+      return;
+    }
+
+    if (
+      this.powerupInventory.ironWill > 0 &&
+      this.playerHP / MAX_HP <= 0.25 &&
+      !this.activePowerups.ironWill
+    ) {
+      this.powerupInventory.ironWill -= 1;
+      this.activePowerups.ironWill = true;
+      this._updatePowerupUI();
+      this._setMsg("Iron Will aktif: incoming damage berkurang 50%.");
+    }
+
+    if (this.activePowerups.ironWill) {
+      dmg = Math.ceil(dmg * 0.5);
+    }
+
     this.playerHP = Math.max(0, this.playerHP - dmg);
     this.drawHUD();
-    this._setMsg(`Dust Bandit menyerang! -${dmg} HP!`);
+    this._setMsg(`${this.activeEnemy.name} menyerang! -${dmg} HP!`);
     this.cameras.main.shake(130, 0.008);
 
     const flash = this.add.graphics().setDepth(8);

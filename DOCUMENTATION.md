@@ -179,3 +179,48 @@ Deskripsi:
 
 Catatan:
 - Berguna untuk menjaga repositori tetap bersih dan hanya menyertakan file penting.
+
+---
+
+## 11. Enemy Wave Design
+
+Desain wave berikut dibuat berdasarkan difficulty curve dari karakter musuh yang sudah disiapkan.
+Gunakan ini sebagai urutan wave default, lalu tambahkan opsi random agar setiap run bisa terasa berbeda.
+
+### Placeholder visual untuk karakter
+- Gunakan placeholder sederhana dulu: emoji pemain/musuh atau warna blok.
+- `Player` dan semua `enemy` bisa direpresentasikan dengan icon teks atau warna sebelum asset final tersedia.
+
+### Rencana wave
+
+| Wave | Musuh | Alasan / Curve |
+|------|-------|----------------|
+| 1 | Goblin ×2 + Forest Bandit | Mudah, mengajarkan mekanik dasar: combo ×2, trap, dan board awareness. |
+| 2 | Goblin ×1 + Walyan Archer ×1 + Stormfjord Refugee ×1 | Tambah variasi awal dengan disruption, target block, dan musuh cepat yang lemah. |
+| 3 | Walyan Soldier ×1 + Spider ×1 + Goblin ×1 | Tekanan menengah: kompresi board + webs + gangguan grup. |
+| 4 | Undead ×1 + Goblin Boss ×1 | Perkenalkan revive dan summon obstacle; butuh combo lebih besar dan fokus. |
+| 5 | Mutated Undead ×1 + Manfrog ×1 + Forest Bandit ×1 | Kontaminasi + slime + trap menciptakan tantangan board control sedang. |
+| 6 | Stormfjord Raider ×1 + Dusk Skeleton ×1 | Rhythm serangan berubah, boss charge dan shield menuntut interrupt/timing. |
+| 7 | Walyan Paladin ×1 + Giant Spider ×1 + Spider ×1 | Late-game pressure dengan purge board, webs, dan potensi spawn tambahan. |
+| 8 | Werewolf ×1 + Walyan Soldier ×1 + Walyan Archer ×1 | Final gauntlet: transformasi + armor + targeted disruption; butuh kombo tinggi dan adaptasi. |
+
+### Opsi random wave
+
+1. Kelompokkan musuh dalam tier:
+   - Tier 1: `Goblin`, `Forest Bandit`, `Stormfjord Refugee`, `Spider`
+   - Tier 2: `Walyan Archer`, `Walyan Soldier`, `Stormfjord Soldier`, `Undead`, `Manfrog`
+   - Tier 3: `Goblin Boss`, `Mutated Undead`, `Dusk Skeleton`, `Stormfjord Raider`, `Walyan Paladin`, `Giant Spider`, `Werewolf`
+2. Untuk wave acak:
+   - Wave awal: pilih 2-3 musuh Tier 1.
+   - Wave menengah: pilih 1-2 Tier 1 + 1 musuh Tier 2.
+   - Wave sulit: pilih 1 musuh Tier 3 + 1-2 musuh pendukung Tier 1/2.
+3. Pastikan ada progression:
+   - Wave awal berfokus pada musuh cepat/lemah.
+   - Wave menengah menambahkan board interference.
+   - Wave akhir membawa boss atau sinergi efek berat.
+4. Tambahkan aturan randomisasi aman:
+   - minimal 1 musuh dengan efek board per wave menengah/tinggi
+   - maksimal 2 musuh Tier 3 per wave
+   - selalu sertakan setidaknya satu musuh yang bisa dikalahkan dengan combo besar untuk memberi pemain peluang comeback
+
+Dengan struktur ini, wave tetap masuk akal secara difficulty curve, sementara random spawn dapat digunakan tanpa merusak flow permainan.

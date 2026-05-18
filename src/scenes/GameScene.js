@@ -11,11 +11,12 @@ import {
   GRID_Y,
   TRAY_Y,
   HUD_CARD_Y,
-  MAX_HP,
-  ENEMY_ATTACK_MS,
-  ENEMY_DMG_MIN,
-  ENEMY_DMG_MAX,
 } from "../config/constants.js";
+import {
+  PLAYER_STATS,
+  ENEMIES,
+  DEFAULT_ENEMY_KEY,
+} from "../config/entities.js";
 import {
   randShape,
   randPieceColor,
@@ -24,6 +25,7 @@ import {
   findFullLines,
   clearLines,
 } from "../utils/helpers.js";
+import { COLORS, FONT_SIZES, createButton, createText, drawHealthBar } from "../utils/UIComponents.js";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const TRAY_PANEL_X = GRID_X - 7;
@@ -70,8 +72,13 @@ export class GameScene extends Phaser.Scene {
 
   _initState() {
     this.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-    this.playerHP = MAX_HP;
-    this.enemyHP = MAX_HP;
+    this.player = { ...PLAYER_STATS, currentHP: PLAYER_STATS.maxHP };
+    this.enemyKeys = Object.keys(ENEMIES);
+    this.enemyIndex = 0;
+    this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
+    this.comboCount = 0;
+    this.comboTimer = null;
+    this.comboCooldown = 10000;
     this.trayPieces = [];
     this.gameOver = false;
     this.isClearing = false;
@@ -97,23 +104,31 @@ export class GameScene extends Phaser.Scene {
   _initTexts() {
     const y = HUD_CARD_Y;
     this.hudTexts = {
-      playerName: this.add.text(50, y + 8, "You", {
+      playerName: this.add.text(50, y + 8, this.player.name, {
         fontSize: "11px",
-        color: "#aaaacc",
+        color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
       }),
-      playerHP: this.add.text(50, y + 22, `${MAX_HP} HP`, {
+      playerHP: this.add.text(50, y + 22, `${this.player.currentHP} HP`, {
         fontSize: "13px",
         fontStyle: "bold",
-        color: "#ffffff",
+        color: `#${COLORS.textPrimary.toString(16).padStart(6, '0')}`,
       }),
-      enemyName: this.add.text(GAME_W / 2 + 48, y + 8, "Dust Bandit", {
+      playerDamage: this.add.text(50, y + 36, "", {
+        fontSize: "10px",
+        color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
+      }),
+      enemyName: this.add.text(GAME_W / 2 + 48, y + 8, this.enemy.name, {
         fontSize: "11px",
-        color: "#aaaacc",
+        color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
       }),
-      enemyHP: this.add.text(GAME_W / 2 + 48, y + 22, `${MAX_HP} HP`, {
+      enemyHP: this.add.text(GAME_W / 2 + 48, y + 22, `${this.enemy.currentHP} HP`, {
         fontSize: "13px",
         fontStyle: "bold",
-        color: "#ffffff",
+        color: `#${COLORS.textPrimary.toString(16).padStart(6, '0')}`,
+      }),
+      enemyDamage: this.add.text(GAME_W / 2 + 48, y + 36, "", {
+        fontSize: "10px",
+        color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
       }),
       playerAv: this.add
         .text(28, y + 20, "🧝", { fontSize: "16px" })
@@ -121,10 +136,17 @@ export class GameScene extends Phaser.Scene {
       enemyAv: this.add
         .text(GAME_W / 2 + 28, y + 20, "👹", { fontSize: "16px" })
         .setOrigin(0.5),
+      comboCount: this.add
+        .text(GAME_W / 2, TRAY_Y - 76, "", {
+          fontSize: "11px",
+          color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5, 0),
       trayLabel: this.add
         .text(GAME_W / 2, TRAY_Y - 54, "Tahan & seret blok ke grid", {
           fontSize: "10px",
-          color: "#555577",
+          color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
         })
         .setOrigin(0.5, 0),
     };
@@ -136,7 +158,7 @@ export class GameScene extends Phaser.Scene {
         "Tahan blok dari bawah lalu seret ke grid.",
         {
           fontSize: "11px",
-          color: "#8888aa",
+          color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
           wordWrap: { width: GAME_W - 20 },
           align: "center",
         },
@@ -147,7 +169,7 @@ export class GameScene extends Phaser.Scene {
       .text(GAME_W / 2, GRID_Y + (ROWS * (CELL + GAP)) / 2, "", {
         fontSize: "28px",
         fontStyle: "bold",
-        color: "#fde047",
+        color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
         stroke: "#000000",
         strokeThickness: 5,
         align: "center",
@@ -165,12 +187,62 @@ export class GameScene extends Phaser.Scene {
   }
 
   _initEnemyTimer() {
+    this._startEnemyTimer();
+  }
+
+  _createEnemy(key) {
+    return {
+      ...ENEMIES[key],
+      currentHP: ENEMIES[key].maxHP,
+    };
+  }
+
+  _startEnemyTimer() {
+    if (this.enemyTimer) this.enemyTimer.remove();
     this.enemyTimer = this.time.addEvent({
-      delay: ENEMY_ATTACK_MS,
+      delay: this.enemy.attackInterval,
       callback: this._enemyAttack,
       callbackScope: this,
       loop: true,
     });
+  }
+
+  _spawnNextEnemy() {
+    this.enemyIndex = (this.enemyIndex + 1) % this.enemyKeys.length;
+    this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
+    this._startEnemyTimer();
+    this.hudTexts.enemyName.setText(this.enemy.name);
+    this.drawHUD();
+    this._setMsg(`Musuh berikutnya: ${this.enemy.name}!`);
+  }
+
+  _onEnemyDefeated() {
+    this._setMsg(`${this.enemy.name} kalah! Musuh baru datang...`);
+    this.time.delayedCall(800, () => {
+      this._spawnNextEnemy();
+    });
+  }
+
+  _recordCombo(total) {
+    if (this.comboCount > 0) {
+      this.comboCount += 1;
+    } else {
+      this.comboCount = 1;
+    }
+    if (this.comboTimer) this.comboTimer.remove();
+    this.comboTimer = this.time.delayedCall(
+      this.comboCooldown,
+      this._resetCombo,
+      [],
+      this,
+    );
+    this.hudTexts.comboCount.setText(`Combo ${this.comboCount}`);
+  }
+
+  _resetCombo() {
+    this.comboCount = 0;
+    this.comboTimer = null;
+    this.hudTexts.comboCount.setText("");
   }
 
   // ── Draw: Background ───────────────────────────────────────────────────────
@@ -178,17 +250,18 @@ export class GameScene extends Phaser.Scene {
   drawBackground() {
     const g = this.bgGfx;
     g.clear();
-    g.fillStyle(0x0f0f1a);
+    g.fillStyle(COLORS.bg);
     g.fillRect(0, 0, GAME_W, GAME_H);
 
     const gW = COLS * (CELL + GAP) + 10;
     const gH = ROWS * (CELL + GAP) + 10;
-    g.fillStyle(0x1a1a2e);
-    g.lineStyle(1, 0x2a2a4a);
+    g.fillStyle(COLORS.surface);
+    g.lineStyle(2, COLORS.primary);
     g.fillRoundedRect(GRID_X - 7, GRID_Y - 7, gW, gH, 8);
     g.strokeRoundedRect(GRID_X - 7, GRID_Y - 7, gW, gH, 8);
 
-    g.fillStyle(0x1a1a2e);
+    g.fillStyle(COLORS.surface);
+    g.lineStyle(1, COLORS.surfaceBorder);
     g.fillRoundedRect(TRAY_PANEL_X, TRAY_Y - 58, TRAY_PANEL_W, 112, 8);
     g.strokeRoundedRect(TRAY_PANEL_X, TRAY_Y - 58, TRAY_PANEL_W, 112, 8);
   }
@@ -205,10 +278,11 @@ export class GameScene extends Phaser.Scene {
     const bx2 = GAME_W / 2 + 48;
     g.clear();
 
-    g.fillStyle(0x1a1a2e);
-    g.lineStyle(1, 0x2a2a4a);
+    g.fillStyle(COLORS.surface);
+    g.lineStyle(2, COLORS.primary);
     g.fillRoundedRect(8, y, CARD_W, CARD_H, 8);
     g.strokeRoundedRect(8, y, CARD_W, CARD_H, 8);
+    g.lineStyle(2, COLORS.danger);
     g.fillRoundedRect(GAME_W / 2 + 6, y, CARD_W, CARD_H, 8);
     g.strokeRoundedRect(GAME_W / 2 + 6, y, CARD_W, CARD_H, 8);
 
@@ -217,20 +291,11 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x3a1e1e);
     g.fillCircle(GAME_W / 2 + 28, y + 20, 14);
 
-    g.fillStyle(0x333355);
-    g.fillRoundedRect(bx1, barY, barW, barH, 4);
-    g.fillRoundedRect(bx2, barY, barW, barH, 4);
+    drawHealthBar(g, bx1, barY, barW, barH, this.player.currentHP, this.player.maxHP);
+    drawHealthBar(g, bx2, barY, barW, barH, this.enemy.currentHP, this.enemy.maxHP);
 
-    const pPct = Math.max(0, this.playerHP / MAX_HP);
-    g.fillStyle(pPct > 0.5 ? 0x4ade80 : pPct > 0.25 ? 0xf59e0b : 0xef4444);
-    if (pPct > 0) g.fillRoundedRect(bx1, barY, barW * pPct, barH, 4);
-
-    const ePct = Math.max(0, this.enemyHP / MAX_HP);
-    g.fillStyle(0xf87171);
-    if (ePct > 0) g.fillRoundedRect(bx2, barY, barW * ePct, barH, 4);
-
-    this.hudTexts.playerHP.setText(`${Math.round(this.playerHP)} HP`);
-    this.hudTexts.enemyHP.setText(`${Math.round(this.enemyHP)} HP`);
+    this.hudTexts.playerHP.setText(`${Math.round(this.player.currentHP)} HP`);
+    this.hudTexts.enemyHP.setText(`${Math.round(this.enemy.currentHP)} HP`);
   }
 
   // ── Draw: Grid ─────────────────────────────────────────────────────────────
@@ -246,12 +311,12 @@ export class GameScene extends Phaser.Scene {
         if (col !== null) {
           g.fillStyle(col);
           g.fillRoundedRect(x, y, CELL, CELL, 4);
-          g.fillStyle(0xffffff, 0.18);
+          g.fillStyle(COLORS.cellHighlight, 0.18);
           g.fillRoundedRect(x + 3, y + 3, CELL - 6, 5, 2);
         } else {
-          g.fillStyle(0x252540);
+          g.fillStyle(COLORS.cellEmpty);
           g.fillRoundedRect(x, y, CELL, CELL, 4);
-          g.lineStyle(1, 0x2a2a4a);
+          g.lineStyle(1, COLORS.cellBorder);
           g.strokeRoundedRect(x, y, CELL, CELL, 4);
         }
       }
@@ -458,27 +523,38 @@ export class GameScene extends Phaser.Scene {
         this.spawnTray();
         this.drawTray();
         this._setMsg("Blok baru! Seret ke grid.");
-        this._checkLooseCondition(); // Check loose condition after spawning new tray
+        // Check lose condition AFTER new pieces spawn
+        this._checkLooseCondition();
       });
-    } else {
-      this._checkLooseCondition(); // Check loose condition after placing a piece
     }
   }
 
   _checkLines() {
     const { fullRows, fullCols } = findFullLines(this.grid, ROWS, COLS);
     const total = fullRows.length + fullCols.length;
-    if (!total) return;
+    if (!total) {
+      // Skip lose check if all pieces are used - will be checked after tray refill
+      if (!this.trayPieces.every((t) => t.used)) {
+        this._checkLooseCondition();
+      }
+      return;
+    }
     this.isClearing = true;
     this._flashLines(fullRows, fullCols, () => {
       clearLines(this.grid, fullRows, fullCols);
       this.drawGrid();
       const dmg = calcDamage(total);
-      this.enemyHP = Math.max(0, this.enemyHP - dmg);
+      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - dmg);
       this.drawHUD();
+      this.showDamage('enemy', dmg);
+      this._recordCombo(total);
       this._showCombo(total, dmg);
       this.isClearing = false;
-      if (this.enemyHP <= 0) this._endGame(true);
+      if (this.enemy.currentHP <= 0) this._onEnemyDefeated();
+      else if (!this.trayPieces.every((t) => t.used)) {
+        // Only check lose if not all pieces are used
+        this._checkLooseCondition();
+      }
     });
   }
 
@@ -542,16 +618,19 @@ export class GameScene extends Phaser.Scene {
         ? `${total} baris sekaligus! Combo damage ${dmg}!`
         : `Baris dihancurkan! Damage ${dmg} ke musuh.`,
     );
+    this.hudTexts.comboCount.setText(this.comboCount ? `Combo ${this.comboCount}` : "");
   }
 
   _enemyAttack() {
     if (this.gameOver) return;
     const dmg =
-      ENEMY_DMG_MIN +
-      Math.floor(Math.random() * (ENEMY_DMG_MAX - ENEMY_DMG_MIN + 1));
-    this.playerHP = Math.max(0, this.playerHP - dmg);
+      this.enemy.damageMin +
+      Math.floor(
+        Math.random() * (this.enemy.damageMax - this.enemy.damageMin + 1),
+      );
+    this.player.currentHP = Math.max(0, this.player.currentHP - dmg);
     this.drawHUD();
-    this._setMsg(`Dust Bandit menyerang! -${dmg} HP!`);
+    this.showDamage('player', dmg);
     this.cameras.main.shake(130, 0.008);
 
     const flash = this.add.graphics().setDepth(8);
@@ -564,26 +643,26 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => flash.destroy(),
     });
 
-    if (this.playerHP <= 0) this._endGame(false);
+    if (this.player.currentHP <= 0) this._endGame(false, "HP habis!");
   }
 
-  _endGame(won) {
+  _endGame(won, reason = "") {
     this.gameOver = true;
     this.enemyTimer.remove();
 
     const overlay = this.add.graphics().setDepth(20);
-    overlay.fillStyle(0x000000, 0.72);
+    overlay.fillStyle(COLORS.overlay, 0.72);
     overlay.fillRect(0, 0, GAME_W, GAME_H);
 
     this.add
       .text(
         GAME_W / 2,
-        GAME_H / 2 - 50,
+        GAME_H / 2 - 60,
         won ? "Kamu Menang! 🎉" : "Game Over 💀",
         {
           fontSize: "30px",
           fontStyle: "bold",
-          color: won ? "#4ade80" : "#f87171",
+          color: won ? `#${COLORS.success.toString(16).padStart(6, '0')}` : `#${COLORS.error.toString(16).padStart(6, '0')}`,
           stroke: "#000000",
           strokeThickness: 4,
         },
@@ -594,31 +673,51 @@ export class GameScene extends Phaser.Scene {
     this.add
       .text(
         GAME_W / 2,
-        GAME_H / 2,
+        GAME_H / 2 - 20,
         won ? "Musuh dikalahkan!" : "Kamu gugur...",
-        { fontSize: "15px", color: "#cccccc" },
+        { fontSize: "15px", color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}` },
       )
       .setOrigin(0.5)
       .setDepth(21);
 
-    const btnGfx = this.add.graphics().setDepth(21);
-    btnGfx.fillStyle(0x6366f1);
-    btnGfx.fillRoundedRect(GAME_W / 2 - 75, GAME_H / 2 + 50, 150, 46, 10);
+    if (reason) {
+      this.add
+        .text(
+          GAME_W / 2,
+          GAME_H / 2 + 15,
+          reason,
+          { fontSize: "12px", color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`, fontStyle: "italic" },
+        )
+        .setOrigin(0.5)
+        .setDepth(21);
+    }
 
-    this.add
-      .text(GAME_W / 2, GAME_H / 2 + 73, "Main Lagi", {
-        fontSize: "16px",
-        fontStyle: "bold",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setDepth(22)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.scene.restart());
+    const { gfx: btnGfx } = createButton(
+      this,
+      GAME_W / 2,
+      GAME_H / 2 + 83,
+      150,
+      46,
+      "🔄 Lagi",
+      COLORS.primary,
+      () => this.scene.restart(),
+      { depth: 22, fontSize: FONT_SIZES.body }
+    );
   }
 
   _setMsg(t) {
     if (this.msgText) this.msgText.setText(t);
+  }
+
+  showDamage(target, dmg) {
+    const text = target === 'player' ? this.hudTexts.playerDamage : this.hudTexts.enemyDamage;
+    text.setText(`-${dmg} HP`).setAlpha(1);
+    this.tweens.add({
+      targets: text,
+      alpha: 0,
+      duration: 1200,
+      ease: 'Power2',
+    });
   }
 
   // Check if no blocks can be placed on the grid
@@ -637,7 +736,7 @@ export class GameScene extends Phaser.Scene {
 
     if (!canPlaceAny) {
       this._setMsg("Tidak ada langkah yang tersedia. Game Over!");
-      this._endGame(false);
+      this._endGame(false, "Tidak ada langkah tersedia.");
     }
   }
 
@@ -650,7 +749,7 @@ export class GameScene extends Phaser.Scene {
     const btnY = 35;
 
     const btnGfx = this.add.graphics().setDepth(15);
-    btnGfx.fillStyle(0x6366f1);
+    btnGfx.fillStyle(COLORS.primary);
     btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
 
     const btnText = this.add
@@ -669,15 +768,13 @@ export class GameScene extends Phaser.Scene {
 
     const hoverHandler = () => {
       btnGfx.clear();
-      btnGfx.fillStyle(0xffffff, 0.15);
-      btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
-      btnGfx.fillStyle(0x6366f1);
+      btnGfx.fillStyle(COLORS.primaryHover);
       btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
     };
 
     const outHandler = () => {
       btnGfx.clear();
-      btnGfx.fillStyle(0x6366f1);
+      btnGfx.fillStyle(COLORS.primary);
       btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
     };
 
@@ -727,7 +824,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
 
     // Semi-transparent overlay
-    g.fillStyle(0x000000, 0.7);
+    g.fillStyle(COLORS.overlay, 0.7);
     g.fillRect(0, 0, GAME_W, GAME_H);
 
     // Menu panel
@@ -736,22 +833,24 @@ export class GameScene extends Phaser.Scene {
     const panelX = GAME_W / 2 - panelW / 2;
     const panelY = GAME_H / 2 - panelH / 2;
 
-    g.fillStyle(0x1a1a2e);
+    g.fillStyle(COLORS.surface);
     g.fillRoundedRect(panelX, panelY, panelW, panelH, 12);
-    g.lineStyle(2, 0x6366f1);
+    g.lineStyle(2, COLORS.primary);
     g.strokeRoundedRect(panelX, panelY, panelW, panelH, 12);
 
     // Title
-    const title = this.add
-      .text(GAME_W / 2, panelY + 25, "PAUSED", {
-        fontSize: "24px",
-        fontStyle: "bold",
-        color: "#fde047",
-        stroke: "#000000",
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-      .setDepth(31);
+    const title = createText(
+      this,
+      GAME_W / 2,
+      panelY + 25,
+      "⏸ PAUSED",
+      {
+        fontSize: FONT_SIZES.subheading,
+        color: COLORS.textAccent,
+        fontStyle: 'bold',
+        depth: 31,
+      }
+    );
     this.pauseMenuObjects.push(title);
 
     // Menu buttons
@@ -765,8 +864,8 @@ export class GameScene extends Phaser.Scene {
       btnY,
       btnW,
       btnH,
-      "Resume",
-      0x4ade80,
+      "▶ Resume",
+      COLORS.success,
       () => this._togglePauseMenu(),
     );
 
@@ -775,8 +874,8 @@ export class GameScene extends Phaser.Scene {
       btnY + btnGap,
       btnW,
       btnH,
-      "Restart",
-      0xf59e0b,
+      "🔄 Restart",
+      COLORS.warning,
       () => {
         this._closePauseMenu();
         this.scene.restart();
@@ -788,8 +887,8 @@ export class GameScene extends Phaser.Scene {
       btnY + btnGap * 2,
       btnW,
       btnH,
-      "Quit to Menu",
-      0xef4444,
+      "🏠 Main Menu",
+      COLORS.danger,
       () => {
         this._closePauseMenu();
         this.scene.start("MenuScene");
@@ -801,8 +900,8 @@ export class GameScene extends Phaser.Scene {
       btnY + btnGap * 3,
       btnW,
       btnH,
-      "Quit Game",
-      0x8b5cf6,
+      "❌ Quit",
+      COLORS.secondary,
       () => {
         this._closePauseMenu();
         this.game.destroy(true);
@@ -817,7 +916,7 @@ export class GameScene extends Phaser.Scene {
 
     const btnText = this.add
       .text(x, y, label, {
-        fontSize: "14px",
+        fontSize: FONT_SIZES.caption,
         fontStyle: "bold",
         color: "#ffffff",
       })
@@ -834,7 +933,7 @@ export class GameScene extends Phaser.Scene {
 
     const hoverHandler = () => {
       btnGfx.clear();
-      btnGfx.fillStyle(0xffffff, 0.2);
+      btnGfx.fillStyle(COLORS.textPrimary, 0.2);
       btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
       btnGfx.fillStyle(color);
       btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);

@@ -1,6 +1,7 @@
 // ─── OptionsScene ─────────────────────────────────────────────────────────────
 import Phaser from "phaser";
 import { GAME_W, GAME_H } from "../config/constants.js";
+import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../utils/UIComponents.js";
 
 export class OptionsScene extends Phaser.Scene {
   constructor() {
@@ -8,87 +9,88 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   create() {
-    // Background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x0f0f1a);
-    bg.fillRect(0, 0, GAME_W, GAME_H);
-
-    // Title
-    this.add
-      .text(GAME_W / 2, 60, "Options", {
-        fontSize: "36px",
-        fontStyle: "bold",
-        color: "#fde047",
-        stroke: "#000000",
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5);
-
-    // Options content (placeholder)
-    this.add
-      .text(GAME_W / 2, GAME_H / 2 - 30, "Sound Effects", {
-        fontSize: "14px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5);
-
-    this.add
-      .text(GAME_W / 2, GAME_H / 2 + 20, "Coming Soon...", {
-        fontSize: "12px",
-        color: "#888888",
-        fontStyle: "italic",
-      })
-      .setOrigin(0.5);
-
-    // Back button
-    this._createButton(
-      GAME_W / 2,
-      GAME_H - 80,
-      150,
-      50,
-      "Back",
-      0x6366f1,
-      () => this.scene.start("MenuScene"),
-    );
+    this._drawBackground();
+    this._drawTitle();
+    this._drawOptions();
+    this._drawBackButton();
   }
 
-  _createButton(x, y, w, h, label, color, callback) {
-    const btnGfx = this.add.graphics();
-    btnGfx.fillStyle(color);
-    btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
+  _drawBackground() {
+    const bg = this.add.graphics().setDepth(0);
+    bg.fillStyle(COLORS.bg);
+    bg.fillRect(0, 0, GAME_W, GAME_H);
 
-    const btnText = this.add
-      .text(x, y, label, {
-        fontSize: "16px",
-        fontStyle: "bold",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
+    // Decorative shapes
+    bg.fillStyle(0x8b5cf6, 0.08);
+    bg.fillCircle(GAME_W * 0.15, GAME_H * 0.2, 90);
+    bg.fillCircle(GAME_W * 0.85, GAME_H * 0.8, 110);
+  }
 
-    const hitArea = new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h);
-    btnText.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
-    btnGfx.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+  _drawTitle() {
+    createText(this, GAME_W / 2, 50, "Options", {
+      fontSize: '44px',
+      color: COLORS.textAccent,
+      fontStyle: 'bold',
+      depth: 5,
+    });
 
-    const hoverHandler = () => {
-      btnGfx.clear();
-      btnGfx.fillStyle(0xffffff, 0.2);
-      btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
-      btnGfx.fillStyle(color);
-      btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
-    };
+    createText(this, GAME_W / 2, 85, "Game Settings", {
+      fontSize: FONT_SIZES.small,
+      color: COLORS.textMuted,
+      depth: 5,
+    });
+  }
 
-    const outHandler = () => {
-      btnGfx.clear();
-      btnGfx.fillStyle(color);
-      btnGfx.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
-    };
+  _drawOptions() {
+    const panelX = GAME_W / 2;
+    const panelY = GAME_H / 2 - 40;
+    const panelW = 280;
+    const panelH = 180;
 
-    btnText.on("pointerover", hoverHandler);
-    btnText.on("pointerout", outHandler);
-    btnGfx.on("pointerover", hoverHandler);
-    btnGfx.on("pointerout", outHandler);
+    // Options panel
+    createPanel(this, panelX, panelY, panelW, panelH, {
+      color: COLORS.surface,
+      borderColor: COLORS.surfaceBorder,
+      borderWidth: 2,
+      radius: 12,
+      depth: 5,
+    });
 
-    btnText.on("pointerdown", callback);
-    btnGfx.on("pointerdown", callback);
+    // Options title
+    createText(this, GAME_W / 2, panelY - panelH / 2 + 20, "Coming Soon", {
+      fontSize: FONT_SIZES.body,
+      color: COLORS.textAccent,
+      fontStyle: 'bold',
+      depth: 6,
+    });
+
+    // Placeholder features
+    const features = [
+      "🔊 Sound Effects",
+      "🎵 Music Volume",
+      "📱 Screen Size",
+    ];
+
+    features.forEach((feature, idx) => {
+      createText(this, GAME_W / 2, panelY - panelH / 2 + 50 + idx * 30, feature, {
+        fontSize: FONT_SIZES.caption,
+        color: COLORS.textSecondary,
+        depth: 6,
+      });
+    });
+  }
+
+  _drawBackButton() {
+    createButton(
+      this,
+      GAME_W / 2,
+      GAME_H - 70,
+      180,
+      50,
+      "← Back to Menu",
+      COLORS.primary,
+      () => this.scene.start("MenuScene"),
+      { depth: 5, fontSize: FONT_SIZES.body }
+    );
   }
 }

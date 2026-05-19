@@ -66,6 +66,10 @@ export class GameScene extends Phaser.Scene {
     if (this.dragging && !this.isPaused) {
       this._updateDragGhost();
     }
+
+    if (this.comboTimer) {
+      this.drawHUD();
+    }
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -79,6 +83,7 @@ export class GameScene extends Phaser.Scene {
     this.comboCount = 0;
     this.comboTimer = null;
     this.comboCooldown = 10000;
+    this.comboCooldownStarted = 0;
     this.trayPieces = [];
     this.gameOver = false;
     this.isClearing = false;
@@ -230,6 +235,7 @@ export class GameScene extends Phaser.Scene {
       this.comboCount = 1;
     }
     if (this.comboTimer) this.comboTimer.remove();
+    this.comboCooldownStarted = this.time.now;
     this.comboTimer = this.time.delayedCall(
       this.comboCooldown,
       this._resetCombo,
@@ -242,6 +248,7 @@ export class GameScene extends Phaser.Scene {
   _resetCombo() {
     this.comboCount = 0;
     this.comboTimer = null;
+    this.comboCooldownStarted = 0;
     this.hudTexts.comboCount.setText("");
   }
 
@@ -293,6 +300,22 @@ export class GameScene extends Phaser.Scene {
 
     drawHealthBar(g, bx1, barY, barW, barH, this.player.currentHP, this.player.maxHP);
     drawHealthBar(g, bx2, barY, barW, barH, this.enemy.currentHP, this.enemy.maxHP);
+
+    if (this.comboTimer && this.comboCount > 0) {
+      const cooldownWidth = 160;
+      const cooldownHeight = 10;
+      const cooldownX = GAME_W / 2 - cooldownWidth / 2;
+      const cooldownY = TRAY_Y - 34;
+      const elapsed = this.time.now - this.comboCooldownStarted;
+      const remaining = Phaser.Math.Clamp(1 - elapsed / this.comboCooldown, 0, 1);
+
+      g.fillStyle(0x1e2345);
+      g.fillRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
+      g.fillStyle(COLORS.textAccent);
+      g.fillRoundedRect(cooldownX, cooldownY, cooldownWidth * remaining, cooldownHeight, 5);
+      g.lineStyle(1, COLORS.surfaceBorder, 0.8);
+      g.strokeRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
+    }
 
     this.hudTexts.playerHP.setText(`${Math.round(this.player.currentHP)} HP`);
     this.hudTexts.enemyHP.setText(`${Math.round(this.enemy.currentHP)} HP`);

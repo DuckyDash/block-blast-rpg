@@ -11,6 +11,8 @@ import {
   GRID_Y,
   TRAY_Y,
   HUD_CARD_Y,
+  BLOCK_COLORS,
+  PIECES,
 } from "../config/constants.js";
 import {
   PLAYER_STATS,
@@ -66,6 +68,10 @@ export class GameScene extends Phaser.Scene {
     if (this.dragging && !this.isPaused) {
       this._updateDragGhost();
     }
+
+    if (this.comboTimer) {
+      this.drawHUD();
+    }
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -79,6 +85,10 @@ export class GameScene extends Phaser.Scene {
     this.comboCount = 0;
     this.comboTimer = null;
     this.comboCooldown = 10000;
+    this.comboCooldownStarted = 0;
+    this.killCount = 0;
+    this.debugMode = false;
+    this.debugSelectedIndex = null;
     this.trayPieces = [];
     this.gameOver = false;
     this.isClearing = false;
@@ -130,6 +140,11 @@ export class GameScene extends Phaser.Scene {
         fontSize: "10px",
         color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
       }),
+      killCount: this.add.text(GAME_W / 2, 24, `Kills: ${this.killCount}`, {
+        fontSize: "12px",
+        color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
+        fontStyle: "bold",
+      }).setOrigin(0.5, 0.5),
       playerAv: this.add
         .text(28, y + 20, "🧝", { fontSize: "16px" })
         .setOrigin(0.5),
@@ -217,6 +232,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   _onEnemyDefeated() {
+    this.killCount += 1;
+    this.hudTexts.killCount.setText(`Kills: ${this.killCount}`);
     this._setMsg(`${this.enemy.name} kalah! Musuh baru datang...`);
     this.time.delayedCall(800, () => {
       this._spawnNextEnemy();
@@ -230,6 +247,7 @@ export class GameScene extends Phaser.Scene {
       this.comboCount = 1;
     }
     if (this.comboTimer) this.comboTimer.remove();
+    this.comboCooldownStarted = this.time.now;
     this.comboTimer = this.time.delayedCall(
       this.comboCooldown,
       this._resetCombo,
@@ -242,6 +260,7 @@ export class GameScene extends Phaser.Scene {
   _resetCombo() {
     this.comboCount = 0;
     this.comboTimer = null;
+    this.comboCooldownStarted = 0;
     this.hudTexts.comboCount.setText("");
   }
 
@@ -294,6 +313,22 @@ export class GameScene extends Phaser.Scene {
     drawHealthBar(g, bx1, barY, barW, barH, this.player.currentHP, this.player.maxHP);
     drawHealthBar(g, bx2, barY, barW, barH, this.enemy.currentHP, this.enemy.maxHP);
 
+    if (this.comboTimer && this.comboCount > 0) {
+      const cooldownWidth = 160;
+      const cooldownHeight = 10;
+      const cooldownX = GAME_W / 2 - cooldownWidth / 2;
+      const cooldownY = TRAY_Y - 34;
+      const elapsed = this.time.now - this.comboCooldownStarted;
+      const remaining = Phaser.Math.Clamp(1 - elapsed / this.comboCooldown, 0, 1);
+
+      g.fillStyle(0x1e2345);
+      g.fillRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
+      g.fillStyle(COLORS.textAccent);
+      g.fillRoundedRect(cooldownX, cooldownY, cooldownWidth * remaining, cooldownHeight, 5);
+      g.lineStyle(1, COLORS.surfaceBorder, 0.8);
+      g.strokeRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
+    }
+
     this.hudTexts.playerHP.setText(`${Math.round(this.player.currentHP)} HP`);
     this.hudTexts.enemyHP.setText(`${Math.round(this.enemy.currentHP)} HP`);
   }
@@ -326,11 +361,24 @@ export class GameScene extends Phaser.Scene {
   // ── Draw: Tray ─────────────────────────────────────────────────────────────
 
   spawnTray() {
-    this.trayPieces = [0, 1, 2].map(() => ({
-      shape: randShape(),
-      color: randPieceColor(), // ← satu warna solid per piece
-      used: false,
-    }));
+    this.trayPieces = [0, 1, 2].map((slotIndex) => {
+      if (
+        this.debugMode &&
+        this.debugSelectedIndex !== null &&
+        slotIndex === 0
+      ) {
+        return {
+          shape: PIECES[this.debugSelectedIndex],
+          color: this._getDebugPieceColor(),
+          used: false,
+        };
+      }
+      return {
+        shape: randShape(),
+        color: randPieceColor(), // ← satu warna solid per piece
+        used: false,
+      };
+    });
   }
 
   drawTray() {
@@ -542,6 +590,8 @@ export class GameScene extends Phaser.Scene {
     this.isClearing = true;
     this._flashLines(fullRows, fullCols, () => {
       clearLines(this.grid, fullRows, fullCols);
+      // satisfying visual + tactile feedback for clears
+      this._playSatisfyingEffect(fullRows, fullCols);
       this.drawGrid();
       const dmg = calcDamage(total);
       this.enemy.currentHP = Math.max(0, this.enemy.currentHP - dmg);
@@ -597,6 +647,70 @@ export class GameScene extends Phaser.Scene {
       flashGfx.destroy();
       onDone();
     });
+  }
+
+  // Satisfying visual effect when lines/columns are cleared
+  _playSatisfyingEffect(fullRows, fullCols) {
+    const centers = [];
+    fullRows.forEach((r) => {
+      for (let c = 0; c < COLS; c++) {
+        centers.push({ x: GRID_X + c * (CELL + GAP) + CELL / 2, y: GRID_Y + r * (CELL + GAP) + CELL / 2 });
+      }
+    });
+    fullCols.forEach((c) => {
+      for (let r = 0; r < ROWS; r++) {
+        centers.push({ x: GRID_X + c * (CELL + GAP) + CELL / 2, y: GRID_Y + r * (CELL + GAP) + CELL / 2 });
+      }
+    });
+
+    // unique centers
+    const uniq = [];
+    const seen = new Set();
+    centers.forEach((p) => {
+      const k = `${Math.round(p.x)}:${Math.round(p.y)}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        uniq.push(p);
+      }
+    });
+
+    // particle burst
+    uniq.forEach((pos) => {
+      const pieces = 6;
+      for (let i = 0; i < pieces; i++) {
+        const g = this.add.graphics().setDepth(18);
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(0, 0, 3);
+        g.x = pos.x;
+        g.y = pos.y;
+
+        const angle = (Math.PI * 2 * i) / pieces + (Math.random() - 0.5) * 0.6;
+        const dist = 14 + Math.random() * 22;
+        const tx = pos.x + Math.cos(angle) * dist;
+        const ty = pos.y + Math.sin(angle) * dist;
+
+        this.tweens.add({
+          targets: g,
+          x: tx,
+          y: ty,
+          alpha: 0,
+          scale: 0.5,
+          duration: 400 + Math.random() * 260,
+          ease: 'Cubic.easeOut',
+          onComplete: () => g.destroy(),
+        });
+      }
+    });
+
+    // subtle full-screen flash
+    const flash = this.add.graphics().setDepth(19);
+    flash.fillStyle(0xffffff, 0.08);
+    flash.fillRect(0, 0, GAME_W, GAME_H);
+    this.tweens.add({ targets: flash, alpha: 0, duration: 260, ease: 'Linear', onComplete: () => flash.destroy() });
+
+    // camera shake scaled by cleared count
+    const intensity = Math.min(0.02, 0.006 * uniq.length);
+    this.cameras.main.shake(260, intensity);
   }
 
   _showCombo(total, dmg) {
@@ -813,6 +927,41 @@ export class GameScene extends Phaser.Scene {
     this.pauseGfx.clear();
   }
 
+  _toggleDebugMode() {
+    this.debugMode = !this.debugMode;
+    this._setMsg(
+      this.debugMode
+        ? "Debug mode diaktifkan. Pilih blok debug jika diperlukan."
+        : "Debug mode dimatikan.",
+    );
+    this._drawPauseMenu();
+  }
+
+  _cycleDebugPiece() {
+    if (this.debugSelectedIndex === null) {
+      this.debugSelectedIndex = 0;
+    } else {
+      this.debugSelectedIndex = (this.debugSelectedIndex + 1) % PIECES.length;
+    }
+    const descriptor = this._getDebugPieceDescriptor();
+    this._setMsg(`Debug blok terpilih: ${descriptor}`);
+    this._drawPauseMenu();
+  }
+
+  _getDebugPieceDescriptor() {
+    if (this.debugSelectedIndex === null) return "Belum ada blok";
+    const shape = PIECES[this.debugSelectedIndex];
+    const rows = shape.length;
+    const cols = Math.max(...shape.map((row) => row.length));
+    const count = shape.flat().filter(Boolean).length;
+    return `${rows}x${cols} (${count} sel)`;
+  }
+
+  _getDebugPieceColor() {
+    if (this.debugSelectedIndex === null) return BLOCK_COLORS[0];
+    return BLOCK_COLORS[this.debugSelectedIndex % BLOCK_COLORS.length];
+  }
+
   _drawPauseMenu() {
     // Clear previous pause menu objects
     this.pauseMenuObjects.forEach((obj) => {
@@ -829,7 +978,7 @@ export class GameScene extends Phaser.Scene {
 
     // Menu panel
     const panelW = 280;
-    const panelH = 280;
+    const panelH = this.debugMode ? 360 : 300;
     const panelX = GAME_W / 2 - panelW / 2;
     const panelY = GAME_H / 2 - panelH / 2;
 
@@ -853,25 +1002,66 @@ export class GameScene extends Phaser.Scene {
     );
     this.pauseMenuObjects.push(title);
 
+    const debugStatus = createText(
+      this,
+      GAME_W / 2,
+      panelY + 55,
+      this.debugMode
+        ? `DEBUG: ON — ${this._getDebugPieceDescriptor()}`
+        : "DEBUG: OFF",
+      {
+        fontSize: FONT_SIZES.caption,
+        color: this.debugMode ? COLORS.warning : COLORS.textSecondary,
+        depth: 31,
+      }
+    );
+    this.pauseMenuObjects.push(debugStatus);
+
     // Menu buttons
-    const btnY = panelY + 70;
+    const btnY = panelY + 85;
     const btnW = 240;
     const btnH = 40;
     const btnGap = 50;
 
+    let row = 0;
     this._createPauseMenuButton(
       GAME_W / 2,
-      btnY,
+      btnY + btnGap * row,
       btnW,
       btnH,
       "▶ Resume",
       COLORS.success,
       () => this._togglePauseMenu(),
     );
+    row += 1;
 
     this._createPauseMenuButton(
       GAME_W / 2,
-      btnY + btnGap,
+      btnY + btnGap * row,
+      btnW,
+      btnH,
+      this.debugMode ? "🐞 Debug: ON" : "🐞 Debug: OFF",
+      this.debugMode ? COLORS.warning : COLORS.secondary,
+      () => this._toggleDebugMode(),
+    );
+    row += 1;
+
+    if (this.debugMode) {
+      this._createPauseMenuButton(
+        GAME_W / 2,
+        btnY + btnGap * row,
+        btnW,
+        btnH,
+        "🎯 Pilih blok debug",
+        COLORS.primary,
+        () => this._cycleDebugPiece(),
+      );
+      row += 1;
+    }
+
+    this._createPauseMenuButton(
+      GAME_W / 2,
+      btnY + btnGap * row,
       btnW,
       btnH,
       "🔄 Restart",
@@ -881,10 +1071,11 @@ export class GameScene extends Phaser.Scene {
         this.scene.restart();
       },
     );
+    row += 1;
 
     this._createPauseMenuButton(
       GAME_W / 2,
-      btnY + btnGap * 2,
+      btnY + btnGap * row,
       btnW,
       btnH,
       "🏠 Main Menu",
@@ -894,10 +1085,11 @@ export class GameScene extends Phaser.Scene {
         this.scene.start("MenuScene");
       },
     );
+    row += 1;
 
     this._createPauseMenuButton(
       GAME_W / 2,
-      btnY + btnGap * 3,
+      btnY + btnGap * row,
       btnW,
       btnH,
       "❌ Quit",

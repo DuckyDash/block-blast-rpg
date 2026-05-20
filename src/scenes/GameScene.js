@@ -281,7 +281,7 @@ export class GameScene extends Phaser.Scene {
 
     g.fillStyle(COLORS.surface);
     g.lineStyle(1, COLORS.surfaceBorder);
-    g.fillRoundedRect(TRAY_PANEL_X, TRAY_Y - 58, TRAY_PANEL_W, 112, 8);
+    g.fillRoundedRect(TRAY_PANEL_X, TRAY_Y - 45, TRAY_PANEL_W, 90, 12);
     g.strokeRoundedRect(TRAY_PANEL_X, TRAY_Y - 58, TRAY_PANEL_W, 112, 8);
   }
 
@@ -297,12 +297,15 @@ export class GameScene extends Phaser.Scene {
     const bx2 = GAME_W / 2 + 48;
     g.clear();
 
+    const leftX = GRID_X - 6;
+    const rightX = GAME_W - GRID_X - CARD_W + 6;
+
     g.fillStyle(COLORS.surface);
     g.lineStyle(2, COLORS.primary);
-    g.fillRoundedRect(8, y, CARD_W, CARD_H, 8);
+    g.fillRoundedRect(10, y, CARD_W - 6, CARD_H, 12);
     g.strokeRoundedRect(8, y, CARD_W, CARD_H, 8);
     g.lineStyle(2, COLORS.danger);
-    g.fillRoundedRect(GAME_W / 2 + 6, y, CARD_W, CARD_H, 8);
+    g.fillRoundedRect(GAME_W / 2 + 4, y, CARD_W - 6, CARD_H, 12);
     g.strokeRoundedRect(GAME_W / 2 + 6, y, CARD_W, CARD_H, 8);
 
     g.fillStyle(0x1e3a5f);
@@ -466,6 +469,47 @@ export class GameScene extends Phaser.Scene {
         });
       });
     }
+
+    if (ok && snapR !== null && snapC !== null) {
+          // Create temp grid to simulate placement
+          const tempGrid = this.grid.map(row => [...row]);
+          p.shape.forEach((row, dr) => {
+            row.forEach((cell, dc) => {
+              if (cell) {
+                const r = snapR + dr;
+                const c = snapC + dc;
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                  tempGrid[r][c] = p.color;
+                }
+              }
+            });
+          });
+
+          // Find full lines that would be cleared
+          const { fullRows, fullCols } = findFullLines(tempGrid, ROWS, COLS);
+
+          // Draw highlight on blocks that will be destroyed
+          fullRows.forEach((r) => {
+            for (let c = 0; c < COLS; c++) {
+              const gx = GRID_X + c * (CELL + GAP);
+              const gy = GRID_Y + r * (CELL + GAP);
+              g.fillStyle(0xff0066, 0.35); // Red highlight
+              g.fillRoundedRect(gx, gy, CELL, CELL, 4);
+              g.lineStyle(2, 0xf50263, 0.9); // Bright red border
+              g.strokeRoundedRect(gx, gy, CELL, CELL, 4);
+            }
+          });
+          fullCols.forEach((c) => {
+            for (let r = 0; r < ROWS; r++) {
+              const gx = GRID_X + c * (CELL + GAP);
+              const gy = GRID_Y + r * (CELL + GAP);
+              g.fillStyle(0xff6b6b, 0.35); // Red highlight
+              g.fillRoundedRect(gx, gy, CELL, CELL, 4);
+              g.lineStyle(2, 0xff1744, 0.9); // Bright red border
+              g.strokeRoundedRect(gx, gy, CELL, CELL, 4);
+            }
+          });
+        }
 
     // Simpan snap position buat dipakai pas pointerup
     this.dragSnapR = onGrid ? snapR : null;
@@ -857,9 +901,9 @@ export class GameScene extends Phaser.Scene {
   // ── Pause Menu ─────────────────────────────────────────────────────────────
 
   _createSettingsButton() {
-    const btnW = 50;
-    const btnH = 50;
-    const btnX = GAME_W - 35;
+    const btnW = 30;
+    const btnH = 30;
+    const btnX = GAME_W - 20;
     const btnY = 35;
 
     const btnGfx = this.add.graphics().setDepth(15);

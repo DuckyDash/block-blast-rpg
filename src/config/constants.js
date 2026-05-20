@@ -11,8 +11,8 @@ export const COLS   = 9
 export const ROWS   = 9
 export const CELL   = 32
 export const GAP    = 2
-export const GRID_X = 12
-export const GRID_Y = 185
+export const GRID_X = 30
+export const GRID_Y = 150
 
 // UI positions
 export const TRAY_Y     = 535

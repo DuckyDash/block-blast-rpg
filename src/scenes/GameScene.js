@@ -36,7 +36,7 @@ const SLOT_W = TRAY_PANEL_W / 3;
 const SMALL = 13; // tray cell preview size
 const SGAP = 2;
 const CARD_W = (GAME_W - 30) / 2;
-const CARD_H = 72;
+const CARD_H = 82;
 
 // Saat drag: ukuran cell yang mengikuti jari
 const DRAG_CELL = 28;

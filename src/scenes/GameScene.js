@@ -470,47 +470,6 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    if (ok && snapR !== null && snapC !== null) {
-          // Create temp grid to simulate placement
-          const tempGrid = this.grid.map(row => [...row]);
-          p.shape.forEach((row, dr) => {
-            row.forEach((cell, dc) => {
-              if (cell) {
-                const r = snapR + dr;
-                const c = snapC + dc;
-                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-                  tempGrid[r][c] = p.color;
-                }
-              }
-            });
-          });
-
-          // Find full lines that would be cleared
-          const { fullRows, fullCols } = findFullLines(tempGrid, ROWS, COLS);
-
-          // Draw highlight on blocks that will be destroyed
-          fullRows.forEach((r) => {
-            for (let c = 0; c < COLS; c++) {
-              const gx = GRID_X + c * (CELL + GAP);
-              const gy = GRID_Y + r * (CELL + GAP);
-              g.fillStyle(0xff0066, 0.35); // Red highlight
-              g.fillRoundedRect(gx, gy, CELL, CELL, 4);
-              g.lineStyle(2, 0xf50263, 0.9); // Bright red border
-              g.strokeRoundedRect(gx, gy, CELL, CELL, 4);
-            }
-          });
-          fullCols.forEach((c) => {
-            for (let r = 0; r < ROWS; r++) {
-              const gx = GRID_X + c * (CELL + GAP);
-              const gy = GRID_Y + r * (CELL + GAP);
-              g.fillStyle(0xff6b6b, 0.35); // Red highlight
-              g.fillRoundedRect(gx, gy, CELL, CELL, 4);
-              g.lineStyle(2, 0xff1744, 0.9); // Bright red border
-              g.strokeRoundedRect(gx, gy, CELL, CELL, 4);
-            }
-          });
-        }
-
     // Simpan snap position buat dipakai pas pointerup
     this.dragSnapR = onGrid ? snapR : null;
     this.dragSnapC = onGrid ? snapC : null;

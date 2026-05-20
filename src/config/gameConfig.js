@@ -8,14 +8,18 @@ import { COLORS } from '../utils/UIComponents.js'
 
 export const gameConfig = {
   type: Phaser.AUTO,
-  width: GAME_W,
-  height: GAME_H,
+  // width: GAME_W,
+  // height: GAME_H,
   backgroundColor: COLORS.bg,
   parent: 'game-container',
   scene: [MenuScene, GameScene, OptionsScene],
+  width: window.innerWidth,
+  height: window.innerHeight,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 360,
+    height: 640,
   },
   pixelArt: true,
 }

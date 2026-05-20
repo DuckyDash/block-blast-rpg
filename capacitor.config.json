@@ -1,6 +1,6 @@
 {
-  "appId": "com.yourname.blockblastrpg",
-  "appName": "Block Blast RPG",
+  "appId": "com.knightblock.myapp",
+  "appName": "KnightBlock",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

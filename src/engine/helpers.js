@@ -1,4 +1,4 @@
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Engine Helpers (core game logic) ────────────────────────────────────────
 import { BLOCK_COLORS, PIECES, COMBO_DAMAGE } from "../config/constants.js";
 
 export function randFrom(arr) {
@@ -46,3 +46,13 @@ export function clearLines(grid, fullRows, fullCols) {
   fullRows.forEach((r) => grid[r].fill(null));
   fullCols.forEach((c) => grid.forEach((row) => (row[c] = null)));
 }
+
+export default {
+  randFrom,
+  randShape,
+  randPieceColor,
+  calcDamage,
+  canPlace,
+  findFullLines,
+  clearLines,
+};

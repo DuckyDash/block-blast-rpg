@@ -31,26 +31,26 @@ export class MenuScene extends Phaser.Scene {
 
   _drawTitle() {
     // Main title
-    createText(this, GAME_W / 2, 50, "Block Blast RPG", {
-      fontSize: '48px',
+    createText(this, GAME_W / 2, 140, "Block Blast RPG", {
+      fontSize: '80px',
       color: COLORS.textAccent,
       fontStyle: 'bold',
       depth: 5,
     });
 
     // Subtitle
-    createText(this, GAME_W / 2, 85, "Puzzle Battle RPG", {
-      fontSize: FONT_SIZES.small,
+    createText(this, GAME_W / 2, 210, "Puzzle Battle RPG", {
+      fontSize: "45px",
       color: COLORS.textMuted,
       depth: 5,
     });
   }
 
   _drawButtons() {
-    const btnStartY = 140;
-    const btnW = 220;
-    const btnH = 52;
-    const btnGap = 65;
+    const btnStartY = 600;
+    const btnW = 600;
+    const btnH = 170;
+    const btnGap = 230;
     const btnX = GAME_W / 2;
 
     // Button 1: Play Endless
@@ -63,20 +63,20 @@ export class MenuScene extends Phaser.Scene {
       "🎮 Play Endless",
       COLORS.primary,
       () => this.scene.start("GameScene", { mode: "endless" }),
-      { depth: 5, fontSize: FONT_SIZES.body }
+      { depth: 5, fontSize: "50px" }
     );
 
-    // Button 2: Play Campaign (Locked)
+    // Button 2: Play Campaign
     createButton(
       this,
       btnX,
       btnStartY + btnGap,
       btnW,
       btnH,
-      "🔒 Campaign (Locked)",
-      0x888888,
-      null,
-      { disabled: true, depth: 5, fontSize: FONT_SIZES.body }
+      "🗺️ Campaign",
+      0x22c55e,
+      () => this.scene.start("CampaignScene", { level: 0 }),
+      { depth: 5, fontSize: "50px" }
     );
 
     // Button 3: Options
@@ -89,7 +89,7 @@ export class MenuScene extends Phaser.Scene {
       "⚙️ Options",
       COLORS.secondary,
       () => this.scene.start("OptionsScene"),
-      { depth: 5, fontSize: FONT_SIZES.body }
+      { depth: 5, fontSize: "50px" }
     );
 
     // Button 4: Quit
@@ -102,13 +102,13 @@ export class MenuScene extends Phaser.Scene {
       "❌ Exit",
       COLORS.danger,
       () => this.game.destroy(true),
-      { depth: 5, fontSize: FONT_SIZES.body }
+      { depth: 5, fontSize: "50px" }
     );
   }
 
   _drawFooter() {
     createText(this, GAME_W / 2, GAME_H - 25, "v1.0.0 • Made with Phaser 3", {
-      fontSize: FONT_SIZES.small,
+      fontSize: "40px",
       color: COLORS.textMuted,
       depth: 5,
     });

@@ -34,13 +34,13 @@ import { COLORS, FONT_SIZES, createButton, createText, HUDCard } from "../ui/ind
 const TRAY_PANEL_X = GRID_X - 7;
 const TRAY_PANEL_W = GAME_W - TRAY_PANEL_X * 2;
 const SLOT_W = TRAY_PANEL_W / 3;
-const SMALL = 13; // tray cell preview size
-const SGAP = 2;
+const SMALL = 40; // tray cell preview size
+const SGAP = 4;
 const CARD_W = (GAME_W - 30) / 2;
-const CARD_H = 82;
+const CARD_H = 120;
 
 // Saat drag: ukuran cell yang mengikuti jari
-const DRAG_CELL = 28;
+const DRAG_CELL = 100;
 const DRAG_GAP = 2;
 
 const PREVIEW_HIGHLIGHT_STYLES = [
@@ -55,6 +55,16 @@ const PREVIEW_HIGHLIGHT_STYLES = [
 export class GameScene extends Phaser.Scene {
   constructor() {
     super("GameScene");
+  }
+
+  init(data) {
+
+    this.mode = data.mode || "endless";
+
+    this.currentLevel = data.level || 0;
+
+    this.levelData = data.levelData || null;
+
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -147,21 +157,53 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hudTexts = {
-      score: this.add.text(GAME_W / 2, 24, `POINTS: ${this.points}`, {
-        fontSize: "18px",
+      playerName: this.add.text(50, y + 8, this.player.name, {
+        fontSize: "11px",
+        color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
+      }),
+      playerHP: this.add.text(50, y + 22, `${this.player.currentHP} HP`, {
+        fontSize: "13px",
+        fontStyle: "bold",
+        color: `#${COLORS.textPrimary.toString(16).padStart(6, '0')}`,
+      }),
+      playerDamage: this.add.text(50, y + 36, "", {
+        fontSize: "10px",
+        color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
+      }),
+      enemyName: this.add.text(GAME_W / 2 + 48, y + 8, this.enemy.name, {
+        fontSize: "11px",
+        color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
+      }),
+      enemyHP: this.add.text(GAME_W / 2 + 48, y + 22, `${this.enemy.currentHP} HP`, {
+        fontSize: "13px",
+        fontStyle: "bold",
+        color: `#${COLORS.textPrimary.toString(16).padStart(6, '0')}`,
+      }),
+      enemyDamage: this.add.text(GAME_W / 2 + 48, y + 36, "", {
+        fontSize: "10px",
+        color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
+      }),
+      killCount: this.add.text(GAME_W / 2, 24, `Kills: ${this.killCount}`, {
+        fontSize: "12px",
         color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
         fontStyle: "bold",
       }).setOrigin(0.5, 0.5),
+      playerAv: this.add
+        .text(28, y + 20, "🧝", { fontSize: "16px" })
+        .setOrigin(0.5),
+      enemyAv: this.add
+        .text(GAME_W / 2 + 28, y + 20, "👹", { fontSize: "16px" })
+        .setOrigin(0.5),
       comboCount: this.add
-        .text(GAME_W / 2, TRAY_Y - 76, "", {
-          fontSize: "11px",
+        .text(GAME_W / 2, TRAY_Y - 340, "", {
+          fontSize: "30px",
           color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
           fontStyle: "bold",
         })
         .setOrigin(0.5, 0),
       trayLabel: this.add
-        .text(GAME_W / 2, TRAY_Y - 54, "Tahan & seret blok ke grid", {
-          fontSize: "10px",
+        .text(GAME_W / 2, TRAY_Y - 180, "Tahan & seret blok ke grid", {
+          fontSize: "40px",
           color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
         })
         .setOrigin(0.5, 0),
@@ -191,7 +233,7 @@ export class GameScene extends Phaser.Scene {
 
     this.comboText = this.add
       .text(GAME_W / 2, GRID_Y + (ROWS * (CELL + GAP)) / 2, "", {
-        fontSize: "28px",
+        fontSize: "100px",
         fontStyle: "bold",
         color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
         stroke: "#000000",
@@ -237,82 +279,40 @@ export class GameScene extends Phaser.Scene {
     this.enemyIndex = (this.enemyIndex + 1) % this.enemyKeys.length;
     this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
     this._startEnemyTimer();
-    this.enemyCard.setName(this.enemy.name);
+    this.hudTexts.enemyName.setText(this.enemy.name);
     this.drawHUD();
-    this._setMsg(`Musuh berikutnya: ${this.enemy.name}!`);
+    this._startEnemyTimer();
   }
 
   _onEnemyDefeated() {
-    const earned = this._getEnemyPoints(this.enemy);
-    this.points += earned;
-    this.hudTexts.score.setText(`Points: ${this.points}`);
-    this._setMsg(`${this.enemy.name} kalah! +${earned} poin.`);
-    this._playEnemyDefeatEffect();
-    this.time.delayedCall(900, () => {
+    this.killCount += 1;
+    this.hudTexts.killCount.setText(`Kills: ${this.killCount}`);
+    this._setMsg(`${this.enemy.name} kalah! Musuh baru datang...`);
+    this.time.delayedCall(800, () => {
       this._spawnNextEnemy();
     });
   }
 
-  _playEnemyDefeatEffect() {
-    const bloodFlash = this.add.graphics().setDepth(20);
-    bloodFlash.fillStyle(0xff1e1e, 0.22);
-    bloodFlash.fillRect(0, 0, GAME_W, GAME_H);
-    this.tweens.add({
-      targets: bloodFlash,
-      alpha: 0,
-      duration: 420,
-      ease: 'Quad.easeOut',
-      onComplete: () => bloodFlash.destroy(),
-    });
-
-    const cardX = GAME_W - CARD_W - 10 + CARD_W / 2;
-    const cardY = HUD_CARD_Y + CARD_H / 2;
-    const burstCount = 14;
-    for (let i = 0; i < burstCount; i++) {
-      const hit = this.add.graphics().setDepth(21);
-      hit.fillStyle(0xff7f7f, 1);
-      hit.fillCircle(0, 0, 3 + Math.random() * 2);
-      hit.x = cardX;
-      hit.y = cardY;
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 30 + Math.random() * 40;
-      this.tweens.add({
-        targets: hit,
-        x: cardX + Math.cos(angle) * dist,
-        y: cardY + Math.sin(angle) * dist,
-        alpha: 0,
-        scale: 0.3,
-        duration: 520 + Math.random() * 180,
-        ease: 'Cubic.easeOut',
-        onComplete: () => hit.destroy(),
-      });
-    }
-
-    const phrase = this._getEnemyDefeatPhrase();
-    this._showFloatingBanner(`${phrase} — ENEMY`, 0xff3f6f, 'KILL');
-    this.cameras.main.shake(320, 0.02);
-  }
-
-  _getEnemyPoints(enemy) {
-    return enemy.points ?? Math.max(10, Math.round(enemy.maxHP * 0.4));
-  }
-
-  _recordCombo(total, dmg) {
+  _recordCombo(total) {
     if (this.comboCount > 0) {
       this.comboCount += 1;
     } else {
       this.comboCount = 1;
     }
-    this.comboMaxDamage = this.comboTimer ? Math.max(this.comboMaxDamage, dmg) : dmg;
     if (this.comboTimer) this.comboTimer.remove();
+
     this.comboCooldownStarted = this.time.now;
+
     this.comboTimer = this.time.delayedCall(
       this.comboCooldown,
       this._resetCombo,
       [],
-      this,
+      this
     );
+
     this.hudTexts.comboCount.setText(`Combo ${this.comboCount}`);
+
+    return calcDamage(total) * this.comboCount;
   }
 
   _resetCombo() {
@@ -340,22 +340,46 @@ export class GameScene extends Phaser.Scene {
 
     g.fillStyle(COLORS.surface);
     g.lineStyle(1, COLORS.surfaceBorder);
-    g.fillRoundedRect(TRAY_PANEL_X, TRAY_Y - 45, TRAY_PANEL_W, 90, 12);
-    g.strokeRoundedRect(TRAY_PANEL_X, TRAY_Y - 58, TRAY_PANEL_W, 112, 8);
+    g.fillRoundedRect(TRAY_PANEL_X, TRAY_Y - 200, TRAY_PANEL_W, 300, 12);
+    g.strokeRoundedRect(TRAY_PANEL_X, TRAY_Y - 200, TRAY_PANEL_W, 300, 8);
   }
 
   // ── Draw: HUD ──────────────────────────────────────────────────────────────
 
   drawHUD() {
-    this.uiGfx.clear();
-    this.playerCard.render(this.player.currentHP, this.player.maxHP);
-    this.enemyCard.render(this.enemy.currentHP, this.enemy.maxHP);
+    const g = this.uiGfx;
+    const y = HUD_CARD_Y;
+    const barY = y + 42;
+    const barH = 8;
+    const barW = CARD_W - 54;
+    const bx1 = 50;
+    const bx2 = GAME_W / 2 + 48;
+    g.clear();
+
+    const leftX = GRID_X - 6;
+    const rightX = GAME_W - GRID_X - CARD_W + 6;
+
+    g.fillStyle(COLORS.surface);
+    g.lineStyle(2, COLORS.primary);
+    g.fillRoundedRect(10, y, CARD_W - 6, CARD_H, 12);
+    g.strokeRoundedRect(8, y, CARD_W, CARD_H, 8);
+    g.lineStyle(2, COLORS.danger);
+    g.fillRoundedRect(GAME_W / 2 + 4, y, CARD_W - 6, CARD_H, 12);
+    g.strokeRoundedRect(GAME_W / 2 + 6, y, CARD_W, CARD_H, 8);
+
+    g.fillStyle(0x1e3a5f);
+    g.fillCircle(28, y + 20, 14);
+    g.fillStyle(0x3a1e1e);
+    g.fillCircle(GAME_W / 2 + 28, y + 20, 14);
+
+    drawHealthBar(g, bx1, barY, barW, barH, this.player.currentHP, this.player.maxHP);
+    drawHealthBar(g, bx2, barY, barW, barH, this.enemy.currentHP, this.enemy.maxHP);
 
     if (this.comboTimer && this.comboCount > 0) {
       const cooldownWidth = 160;
       const cooldownHeight = 10;
       const cooldownX = GAME_W / 2 - cooldownWidth / 2;
-      const cooldownY = TRAY_Y - 34;
+      const cooldownY = TRAY_Y - 300;
       const elapsed = this.time.now - this.comboCooldownStarted;
       const remaining = Phaser.Math.Clamp(1 - elapsed / this.comboCooldown, 0, 1);
 
@@ -440,7 +464,7 @@ export class GameScene extends Phaser.Scene {
       const totalW = maxC * (SMALL + SGAP) - SGAP;
       const totalH = p.shape.length * (SMALL + SGAP) - SGAP;
       const sx = slotCX - totalW / 2;
-      const sy = TRAY_Y - totalH / 2;
+      const sy = TRAY_Y - totalH / 1.5;
 
       p.shape.forEach((row, ri) => {
         row.forEach((cell, dc) => {
@@ -707,8 +731,7 @@ export class GameScene extends Phaser.Scene {
       this._playSatisfyingEffect(fullRows, fullCols, total);
       this.drawGrid();
       const dmg = calcDamage(total);
-      const effectiveDmg = this.comboTimer ? Math.max(this.comboMaxDamage, dmg) : dmg;
-      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - effectiveDmg);
+      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - dmg);
       this.drawHUD();
       this.showDamage('enemy', effectiveDmg);
       this._recordCombo(total, dmg);

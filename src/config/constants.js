@@ -3,20 +3,20 @@
 // Jangan hardcode nilai di scene — selalu import dari file ini.
 
 // Canvas
-export const GAME_W = 360
-export const GAME_H = 640
+export const GAME_W = 1080
+export const GAME_H = 1920
 
 // Grid
 export const COLS   = 9
 export const ROWS   = 9
-export const CELL   = 30
-export const GAP    = 2
-export const GRID_X = 40
-export const GRID_Y = 210
+export const CELL   = 100
+export const GAP    = 4
+export const GRID_X = Math.round((GAME_W - COLS * (CELL + GAP) + GAP) / 2)
+export const GRID_Y = 380
 
 // UI positions
-export const TRAY_Y     = 580
-export const HUD_CARD_Y = 60
+export const TRAY_Y     = 1700
+export const HUD_CARD_Y = 200
 
 // Battle
 export const MAX_HP          = 20000

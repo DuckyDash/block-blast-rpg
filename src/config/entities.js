@@ -12,7 +12,7 @@ export const ENEMIES = {
     name: "Goblin",
     type: "Enemy — Pest",
     description: "A scrawny, cackling pest. Weak alone but irritating in packs.",
-    maxHP: 55,
+    maxHP: 5,
     damageMin: 6,
     damageMax: 8,
     attackInterval: 10000,

@@ -182,7 +182,7 @@ export class GameScene extends Phaser.Scene {
         GAME_H - 12,
         "Tahan blok dari bawah lalu seret ke grid.",
         {
-          fontSize: "11px",
+          fontSize: "40px",
           color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
           wordWrap: { width: GAME_W - 20 },
           align: "center",

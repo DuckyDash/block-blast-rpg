@@ -8,6 +8,7 @@ import { COLORS } from '../utils/UIComponents.js'
 
 export const gameConfig = {
   type: Phaser.AUTO,
+  parent: 'game-container',
 
   width: GAME_W,
   height: GAME_H,

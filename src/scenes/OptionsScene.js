@@ -1,7 +1,7 @@
 // ─── OptionsScene ─────────────────────────────────────────────────────────────
 import Phaser from "phaser";
 import { GAME_W, GAME_H } from "../config/constants.js";
-import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../utils/UIComponents.js";
+import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../ui/UIComponents.js";
 
 export class OptionsScene extends Phaser.Scene {
   constructor() {

@@ -28,30 +28,20 @@ export const ENEMY_DMG_MAX   = 14
 // 4+ = lines * 20
 export const COMBO_DAMAGE = [0, 10, 25, 45]
 
-// Warna blok — tiap cell dapat warna random dari list ini
+// Simplified prototype block colors
 export const BLOCK_COLORS = [
-  0x6366f1, // indigo
-  0x0ea5e9, // sky
-  0x10b981, // emerald
-  0xf59e0b, // amber
-  0xec4899, // pink
-  0x8b5cf6, // violet
-  0xef4444, // red
-  0x14b8a6, // teal
+  0x0ea5e9, // biru
+  0x10b981, // hijau
+  0xf59e0b, // kuning
+  0xef4444, // merah
 ]
 
-// Shape pieces — 1 = filled, 0 = kosong
+// Simple prototype pieces — lebih sedikit bentuk untuk proof of concept
 export const PIECES = [
-  [[1,1],[1,1]],
-  [[1,1,1]],
-  [[1],[1],[1]],
-  [[1,1,1],[0,1,0]],
-  [[1,0],[1,0],[1,1]],
-  [[0,1],[0,1],[1,1]],
-  [[1,1,0],[0,1,1]],
-  [[1,1,1,1]],
   [[1]],
-  [[1,1],[1,0]],
-  [[1,1,1],[1,0,0]],
-  [[1,0,0],[1,1,1]],
+  [[1, 1]],
+  [[1], [1]],
+  [[1, 1], [1, 1]],
+  [[1, 1, 1]],
+  [[1], [1], [1]],
 ]

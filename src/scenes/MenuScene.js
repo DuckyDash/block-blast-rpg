@@ -1,7 +1,8 @@
 // ─── MenuScene ────────────────────────────────────────────────────────────────
 import Phaser from "phaser";
 import { GAME_W, GAME_H } from "../config/constants.js";
-import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../utils/UIComponents.js";
+import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../ui/UIComponents.js";
+import { showBannerAd, hideBannerAd } from "../admob.js";
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -9,6 +10,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    showBannerAd().catch((error) => console.warn('Banner failed to show', error))
+    this.events.on('shutdown', () => hideBannerAd().catch(() => {}), this)
     this._drawBackground();
     this._drawTitle();
     this._drawButtons();
@@ -62,7 +65,10 @@ export class MenuScene extends Phaser.Scene {
       btnH,
       "🎮 Play Endless",
       COLORS.primary,
-      () => this.scene.start("GameScene", { mode: "endless" }),
+      () => {
+        hideBannerAd().catch(() => {})
+        this.scene.start("GameScene", { mode: "endless" })
+      },
       { depth: 5, fontSize: "50px" }
     );
 
@@ -75,7 +81,10 @@ export class MenuScene extends Phaser.Scene {
       btnH,
       "🗺️ Campaign",
       0x22c55e,
-      () => this.scene.start("CampaignScene", { level: 0 }),
+      () => {
+        hideBannerAd().catch(() => {})
+        this.scene.start("CampaignScene", { level: 0 })
+      },
       { depth: 5, fontSize: "50px" }
     );
 

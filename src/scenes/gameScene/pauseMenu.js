@@ -14,10 +14,10 @@ export function createSettingsButton(scene) {
   const btnText = scene.add
     .text(btnX, btnY, "⚙", { fontSize: "24px" })
     .setOrigin(0.5)
-    .setDepth(15)
-    .setInteractive({ useHandCursor: true });
+    .setDepth(15);
 
   const hitArea = new Phaser.Geom.Rectangle(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH);
+  btnText.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
   btnGfx.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
 
   const hoverHandler = () => {
@@ -148,13 +148,13 @@ export function createPauseMenuButton(scene, x, y, w, h, label, color, callback)
       color: "#ffffff",
     })
     .setOrigin(0.5)
-    .setDepth(32)
-    .setInteractive({ useHandCursor: true });
+    .setDepth(32);
 
   scene.pauseMenuObjects.push(btnGfx);
   scene.pauseMenuObjects.push(btnText);
 
   const hitArea = new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h);
+  btnText.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
   btnGfx.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
 
   const hoverHandler = () => {

@@ -7,12 +7,12 @@ export const CAMPAIGN_LEVELS = [
   {
     level: 2,
     title: "Goblin Camp",
-    enemy: "Orc",
+    enemy: "Undead",
   },
   {
     level: 3,
     title: "Dark Cave",
-    enemy: "Skeleton",
+    enemy: "DuskSkeleton",
   },
   {
     level: 4,

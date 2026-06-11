@@ -1,6 +1,8 @@
 // ─── GameScene ────────────────────────────────────────────────────────────────
 import Phaser from "phaser";
 import { App as CapacitorApp } from "@capacitor/app";
+import { Haptics } from "@capacitor/haptics";
+import { CAMPAIGN_LEVELS } from "../config/campaign.js";
 import {
   GAME_W,
   GAME_H,
@@ -95,8 +97,17 @@ export class GameScene extends Phaser.Scene {
     this.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     this.player = { ...PLAYER_STATS, currentHP: PLAYER_STATS.maxHP };
     this.enemyKeys = Object.keys(ENEMIES);
-    this.enemyIndex = 0;
-    this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
+    
+    if (this.mode === "campaign" && this.levelData) {
+      const enemyKey = this.levelData.enemy;
+      this.enemyIndex = this.enemyKeys.indexOf(enemyKey);
+      if (this.enemyIndex === -1) this.enemyIndex = 0;
+      this.enemy = this._createEnemy(enemyKey);
+    } else {
+      this.enemyIndex = 0;
+      this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
+    }
+
     this.comboCount = 0;
     this.comboTimer = null;
     this.comboCooldown = 10000;
@@ -270,13 +281,55 @@ export class GameScene extends Phaser.Scene {
 
   _onEnemyDefeated() 
   {
-    this.killCount += 1;
-    this.hudTexts.killCount.setText(`Kills: ${this.killCount}`);
-
     // Stop serangan musuh lama
     if (this.enemyTimer) {
       this.enemyTimer.remove();
     }
+
+    if (this.mode === "campaign") {
+      this.isPaused = true;
+      this.gameOver = true;
+
+      // Update progress
+      const currentProgress = localStorage.getItem("knightblock_campaign_progress");
+      const unlocked = currentProgress ? parseInt(currentProgress) : 1;
+      const finishedLevelNum = this.currentLevel + 1; // 0-indexed level + 1 = level number
+      if (finishedLevelNum === unlocked) {
+        localStorage.setItem("knightblock_campaign_progress", (unlocked + 1).toString());
+      }
+
+      // Transition effect
+      const overlay = this.add.graphics().setDepth(99).setAlpha(0);
+      overlay.fillStyle(0x000000, 1);
+      overlay.fillRect(0, 0, GAME_W, GAME_H);
+      this.tweens.add({ targets: overlay, alpha: 0.55, duration: 400 });
+
+      const winText = this.add.text(GAME_W / 2, GAME_H / 2, "STAGE CLEARED!", {
+        fontSize: "72px",
+        fontStyle: "bold",
+        color: "#4ade80",
+        stroke: "#000",
+        strokeThickness: 8,
+      }).setOrigin(0.5).setDepth(100).setScale(0.5);
+
+      this.tweens.add({
+        targets: winText,
+        scale: 1,
+        duration: 500,
+        ease: "Back.easeOut",
+        onComplete: () => {
+          this.time.delayedCall(1000, () => {
+            winText.destroy();
+            overlay.destroy();
+            this._endGame(true, "Level Selesai!");
+          });
+        }
+      });
+      return;
+    }
+
+    this.killCount += 1;
+    this.hudTexts.killCount.setText(`Kills: ${this.killCount}`);
 
     // Lock sementara
     this.isPaused = true;
@@ -960,6 +1013,7 @@ export class GameScene extends Phaser.Scene {
     this.drawHUD();
     this.showDamage('player', dmg);
     this.cameras.main.shake(130, 0.008);
+    this._triggerVibration();
 
     const flash = this.add.graphics().setDepth(8);
     flash.fillStyle(0xff0000, 0.28);
@@ -974,6 +1028,18 @@ export class GameScene extends Phaser.Scene {
     if (this.player.currentHP <= 0) this._endGame(false, "HP habis!");
   }
 
+  async _triggerVibration() {
+    try {
+      if (window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        await Haptics.vibrate({ duration: 200 });
+      } else if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+    } catch (e) {
+      console.warn("Haptics/Vibration not supported or failed:", e);
+    }
+  }
+
   _endGame(won, reason = "") {
     this.gameOver = true;
     this.enemyTimer.remove();
@@ -981,6 +1047,97 @@ export class GameScene extends Phaser.Scene {
     const overlay = this.add.graphics().setDepth(20);
     overlay.fillStyle(COLORS.overlay, 0.72);
     overlay.fillRect(0, 0, GAME_W, GAME_H);
+
+    if (this.mode === "campaign") {
+      const titleText = won ? "Level Selesai! 🎉" : "Ksatria Gugur... 💀";
+      const descText = won ? "Monster telah dibersihkan." : "Kembali dan perkuat strategimu.";
+      
+      this.add.text(GAME_W / 2, GAME_H / 2 - 100, titleText, {
+        fontSize: "64px",
+        fontStyle: "bold",
+        color: won ? `#${COLORS.success.toString(16).padStart(6, '0')}` : `#${COLORS.error.toString(16).padStart(6, '0')}`,
+        stroke: "#000000",
+        strokeThickness: 6,
+      }).setOrigin(0.5).setDepth(21);
+
+      this.add.text(GAME_W / 2, GAME_H / 2 - 20, descText, {
+        fontSize: "32px",
+        color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}`
+      }).setOrigin(0.5).setDepth(21);
+
+      if (won) {
+        const hasNext = this.currentLevel + 1 < CAMPAIGN_LEVELS.length;
+        if (hasNext) {
+          createButton(
+            this,
+            GAME_W / 2 - 220,
+            GAME_H / 2 + 120,
+            380,
+            90,
+            "🎮 Next Level",
+            COLORS.success,
+            () => {
+              const nextLvlIndex = this.currentLevel + 1;
+              this.scene.start("GameScene", {
+                mode: "campaign",
+                level: nextLvlIndex,
+                levelData: CAMPAIGN_LEVELS[nextLvlIndex]
+              });
+            },
+            { depth: 22, fontSize: "32px" }
+          );
+
+          createButton(
+            this,
+            GAME_W / 2 + 220,
+            GAME_H / 2 + 120,
+            380,
+            90,
+            "🗺️ Campaign Map",
+            COLORS.primary,
+            () => this.scene.start("CampaignScene"),
+            { depth: 22, fontSize: "32px" }
+          );
+        } else {
+          createButton(
+            this,
+            GAME_W / 2,
+            GAME_H / 2 + 120,
+            420,
+            90,
+            "🗺️ Campaign Map",
+            COLORS.primary,
+            () => this.scene.start("CampaignScene"),
+            { depth: 22, fontSize: "32px" }
+          );
+        }
+      } else {
+        createButton(
+          this,
+          GAME_W / 2 - 220,
+          GAME_H / 2 + 120,
+          380,
+          90,
+          "🔄 Coba Lagi",
+          COLORS.warning,
+          () => this.scene.restart(),
+          { depth: 22, fontSize: "32px" }
+        );
+
+        createButton(
+          this,
+          GAME_W / 2 + 220,
+          GAME_H / 2 + 120,
+          380,
+          90,
+          "🗺️ Campaign Map",
+          COLORS.primary,
+          () => this.scene.start("CampaignScene"),
+          { depth: 22, fontSize: "32px" }
+        );
+      }
+      return;
+    }
 
     this.add
       .text(

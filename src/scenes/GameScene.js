@@ -843,11 +843,10 @@ export class GameScene extends Phaser.Scene {
         this.drawHUD();
         this.showHeal(healData.totalHeal, healData.coords);
       }
-      const dmg = this._recordCombo(total);
-      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - dmg);
+      const effectiveDmg = this._recordCombo(total);
+      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - effectiveDmg);
       this.drawHUD();
       this.showDamage('enemy', effectiveDmg);
-      this._recordCombo(total, dmg);
       this._showCombo(total, effectiveDmg);
       this.isClearing = false;
       if (this.enemy.currentHP <= 0) this._onEnemyDefeated();

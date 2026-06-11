@@ -1,45 +1,30 @@
-// ─── UI Components Library ─────────────────────────────────────────────────────
-// Reusable UI components for consistent design across all scenes.
-
+// ─── UI Components Library (moved to src/ui) ────────────────────────────────
 import Phaser from 'phaser';
 
-// ── Color Palette ──────────────────────────────────────────────────────────────
 export const COLORS = {
-  // Background & surfaces
-  bg: 0x0a0e27,          // Deep navy background
-  surface: 0x141829,     // Card/panel surface
+  bg: 0x0a0e27,
+  surface: 0x141829,
   surfaceBorder: 0x2d2e4d,
-  
-  // UI Elements
-  primary: 0x6366f1,     // Indigo (primary button)
+  primary: 0x6366f1,
   primaryHover: 0x818cf8,
-  secondary: 0x8b5cf6,   // Violet
-  success: 0x4ade80,     // Green
-  warning: 0xf59e0b,     // Amber
-  danger: 0xef4444,      // Red
-  error: 0xf87171,       // Light red
-  
-  // Text
+  secondary: 0x8b5cf6,
+  success: 0x4ade80,
+  warning: 0xf59e0b,
+  danger: 0xef4444,
+  error: 0xf87171,
   textPrimary: 0xffffff,
   textSecondary: 0xcccccc,
   textMuted: 0x8888aa,
-  textAccent: 0xfde047,  // Yellow
-  
-  // Status
+  textAccent: 0xfde047,
   healthGood: 0x4ade80,
   healthMedium: 0xf59e0b,
   healthLow: 0xef4444,
-  
-  // Grid cells
   cellEmpty: 0x252540,
   cellBorder: 0x2a2a4a,
   cellHighlight: 0xffffff,
-  
-  // Gradient support for overlays
   overlay: 0x000000,
 };
 
-// ── Typography ────────────────────────────────────────────────────────────────
 export const FONT_SIZES = {
   title: '42px',
   heading: '36px',
@@ -50,18 +35,6 @@ export const FONT_SIZES = {
   tiny: '10px',
 };
 
-// ── Button Factory ────────────────────────────────────────────────────────────
-/**
- * Creates a styled button with graphics and text
- * @param scene - Phaser scene
- * @param x, y - Position
- * @param w, h - Dimensions
- * @param label - Button text
- * @param color - Button color
- * @param callback - Click handler
- * @param options - Additional options: disabled, depth
- * @returns {Object} - { gfx, text }
- */
 export function createButton(scene, x, y, w, h, label, color, callback, options = {}) {
   const {
     disabled = false,
@@ -115,22 +88,7 @@ export function createButton(scene, x, y, w, h, label, color, callback, options 
   return { gfx: btnGfx, text: btnText };
 }
 
-// ── Panel Factory ──────────────────────────────────────────────────────────────
-/**
- * Creates a styled panel/card background
- * @param scene - Phaser scene
- * @param x, y, w, h - Position and dimensions
- * @param options - { color, borderColor, borderWidth, radius, depth }
- * @returns Graphics object
- */
-export function createPanel(
-  scene,
-  x,
-  y,
-  w,
-  h,
-  options = {}
-) {
+export function createPanel(scene, x, y, w, h, options = {}) {
   const {
     color = COLORS.surface,
     borderColor = COLORS.surfaceBorder,
@@ -151,22 +109,10 @@ export function createPanel(
   return panel;
 }
 
-// ── Health Bar Factory ─────────────────────────────────────────────────────────
-/**
- * Draws a health bar
- * @param graphics - Phaser graphics object
- * @param x, y - Position (top-left)
- * @param w, h - Width and height
- * @param currentHP - Current health points
- * @param maxHP - Maximum health points
- * @returns null
- */
 export function drawHealthBar(graphics, x, y, w, h, currentHP, maxHP) {
-  // Background (empty bar)
   graphics.fillStyle(0x333355);
   graphics.fillRoundedRect(x, y, w, h, 4);
 
-  // Foreground (filled portion)
   const pct = Math.max(0, currentHP / maxHP);
   let barColor = COLORS.healthGood;
   if (pct <= 0.5) barColor = pct <= 0.25 ? COLORS.healthLow : COLORS.healthMedium;
@@ -177,15 +123,6 @@ export function drawHealthBar(graphics, x, y, w, h, currentHP, maxHP) {
   }
 }
 
-// ── Text Factory ──────────────────────────────────────────────────────────────
-/**
- * Creates styled text with common options
- * @param scene - Phaser scene
- * @param x, y - Position
- * @param text - Text content
- * @param options - { fontSize, color, fontStyle, align, depth }
- * @returns Text object
- */
 export function createText(scene, x, y, text, options = {}) {
   const {
     fontSize = FONT_SIZES.body,
@@ -217,16 +154,6 @@ export function createText(scene, x, y, text, options = {}) {
   return t.setDepth(depth);
 }
 
-// ── Badge/Indicator Factory ────────────────────────────────────────────────────
-/**
- * Creates a small badge/indicator
- * @param scene - Phaser scene
- * @param x, y - Position
- * @param text - Badge text
- * @param color - Background color
- * @param options - { size, depth }
- * @returns Object { gfx, text }
- */
 export function createBadge(scene, x, y, text, color, options = {}) {
   const { size = 20, depth = 10 } = options;
 
@@ -246,25 +173,13 @@ export function createBadge(scene, x, y, text, color, options = {}) {
   return { gfx, text: t };
 }
 
-// ── Progress Ring Factory ──────────────────────────────────────────────────────
-/**
- * Creates a circular progress indicator
- * @param graphics - Phaser graphics object
- * @param x, y - Center position
- * @param radius - Radius of circle
- * @param percent - Progress 0-1
- * @param color - Fill color
- * @returns null
- */
 export function drawProgressRing(graphics, x, y, radius, percent, color) {
   const startAngle = -Math.PI / 2;
   const endAngle = startAngle + Math.PI * 2 * percent;
 
-  // Background circle
   graphics.fillStyle(0x333333);
   graphics.fillCircle(x, y, radius);
 
-  // Progress arc (approximated with wedge)
   graphics.fillStyle(color);
   graphics.fillPointTriangles([
     x, y,

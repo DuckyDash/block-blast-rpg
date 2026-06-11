@@ -4,7 +4,7 @@ import { GameScene } from '../scenes/GameScene.js'
 import { MenuScene } from '../scenes/MenuScene.js'
 import { OptionsScene } from '../scenes/OptionsScene.js'
 import { CampaignScene } from '../scenes/CampaignScene.js'
-import { COLORS } from '../utils/UIComponents.js'
+import { COLORS } from '../ui/UIComponents.js'
 
 export const gameConfig = {
   type: Phaser.AUTO,

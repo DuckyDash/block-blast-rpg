@@ -1,0 +1,33 @@
+export const COLORS = {
+  bg: 0x0a0e27,
+  surface: 0x141829,
+  surfaceBorder: 0x2d2e4d,
+  primary: 0x6366f1,
+  primaryHover: 0x818cf8,
+  secondary: 0x8b5cf6,
+  success: 0x4ade80,
+  warning: 0xf59e0b,
+  danger: 0xef4444,
+  error: 0xf87171,
+  textPrimary: 0xffffff,
+  textSecondary: 0xcccccc,
+  textMuted: 0x8888aa,
+  textAccent: 0xfde047,
+  healthGood: 0x4ade80,
+  healthMedium: 0xf59e0b,
+  healthLow: 0xef4444,
+  cellEmpty: 0x252540,
+  cellBorder: 0x2a2a4a,
+  cellHighlight: 0xffffff,
+  overlay: 0x000000,
+};
+
+export const FONT_SIZES = {
+  title: '42px',
+  heading: '36px',
+  subheading: '24px',
+  body: '16px',
+  caption: '13px',
+  small: '11px',
+  tiny: '10px',
+};

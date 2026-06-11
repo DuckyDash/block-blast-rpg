@@ -2,7 +2,7 @@
 import Phaser from "phaser";
 import { CAMPAIGN_LEVELS } from "../config/campaign.js";
 import { GAME_W, GAME_H } from "../config/constants.js";
-import { COLORS, createButton, createPanel, createText } from "../utils/UIComponents.js";
+import { COLORS, createButton, createPanel, createText } from "../ui/UIComponents.js";
 import { ENEMIES } from "../config/entities.js";
 
 export class CampaignScene extends Phaser.Scene {

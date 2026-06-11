@@ -29,7 +29,7 @@ import {
   findFullLines,
   clearLines,
 } from "../engine/helpers.js";
-import { COLORS, FONT_SIZES, createButton, createText, HUDCard } from "../ui/index.js";
+import { COLORS, FONT_SIZES, createButton, createText, drawHealthBar, HUDCard } from "../ui/index.js";
 
 // Powerup feature disabled for the current game mode
 

@@ -1,5 +1,8 @@
 // ─── GameScene ────────────────────────────────────────────────────────────────
 import Phaser from "phaser";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Haptics } from "@capacitor/haptics";
+import { CAMPAIGN_LEVELS } from "../config/campaign.js";
 import {
   GAME_W,
   GAME_H,
@@ -26,7 +29,7 @@ import {
   findFullLines,
   clearLines,
 } from "../engine/helpers.js";
-import { COLORS, FONT_SIZES, createButton, createText, HUDCard } from "../ui/index.js";
+import { COLORS, FONT_SIZES, createButton, createText, drawHealthBar, HUDCard } from "../ui/index.js";
 
 // Powerup feature disabled for the current game mode
 
@@ -42,6 +45,10 @@ const CARD_H = 120;
 // Saat drag: ukuran cell yang mengikuti jari
 const DRAG_CELL = 100;
 const DRAG_GAP = 2;
+
+const HEALTH_BLOCK_COLOR = 0x22c55e;
+const HEALTH_BLOCK_HEAL = 5; // heal amount per special block cleared
+const SPECIAL_BLOCK_CHANCE = 0.15; // peluang muncul di tray
 
 const PREVIEW_HIGHLIGHT_STYLES = [
   { fill: 0xff6b6b, alpha: 0.35, stroke: 0xff1744 },
@@ -100,14 +107,24 @@ export class GameScene extends Phaser.Scene {
     this.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     this.player = { ...PLAYER_STATS, currentHP: PLAYER_STATS.maxHP };
     this.enemyKeys = Object.keys(ENEMIES);
-    this.enemyIndex = 0;
-    this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
+    
+    if (this.mode === "campaign" && this.levelData) {
+      const enemyKey = this.levelData.enemy;
+      this.enemyIndex = this.enemyKeys.indexOf(enemyKey);
+      if (this.enemyIndex === -1) this.enemyIndex = 0;
+      this.enemy = this._createEnemy(enemyKey);
+    } else {
+      this.enemyIndex = 0;
+      this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
+    }
+
     this.comboCount = 0;
     this.comboTimer = null;
     this.comboCooldown = 10000;
     this.comboCooldownStarted = 0;
     this.comboMaxDamage = 0;
     this.points = 0;
+    this.killCount = 0;
     this.debugMode = false;
     this.debugSelectedIndex = null;
     this.trayPieces = [];
@@ -157,75 +174,55 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hudTexts = {
-      playerName: this.add.text(50, y + 8, this.player.name, {
-        fontSize: "11px",
-        color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
-      }),
-      playerHP: this.add.text(50, y + 22, `${this.player.currentHP} HP`, {
-        fontSize: "13px",
-        fontStyle: "bold",
-        color: `#${COLORS.textPrimary.toString(16).padStart(6, '0')}`,
-      }),
-      playerDamage: this.add.text(50, y + 36, "", {
-        fontSize: "10px",
-        color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
-      }),
-      enemyName: this.add.text(GAME_W / 2 + 48, y + 8, this.enemy.name, {
-        fontSize: "11px",
-        color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
-      }),
-      enemyHP: this.add.text(GAME_W / 2 + 48, y + 22, `${this.enemy.currentHP} HP`, {
-        fontSize: "13px",
-        fontStyle: "bold",
-        color: `#${COLORS.textPrimary.toString(16).padStart(6, '0')}`,
-      }),
-      enemyDamage: this.add.text(GAME_W / 2 + 48, y + 36, "", {
-        fontSize: "10px",
-        color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
-      }),
-      killCount: this.add.text(GAME_W / 2, 24, `Kills: ${this.killCount}`, {
-        fontSize: "12px",
+      killCount: this.add.text(GAME_W / 2, 80, "", {
+        fontSize: "32px",
         color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
         fontStyle: "bold",
       }).setOrigin(0.5, 0.5),
-      playerAv: this.add
-        .text(28, y + 20, "🧝", { fontSize: "16px" })
-        .setOrigin(0.5),
-      enemyAv: this.add
-        .text(GAME_W / 2 + 28, y + 20, "👹", { fontSize: "16px" })
-        .setOrigin(0.5),
+
       comboCount: this.add
         .text(GAME_W / 2, TRAY_Y - 340, "", {
-          fontSize: "30px",
+          fontSize: "48px",
           color: `#${COLORS.textAccent.toString(16).padStart(6, '0')}`,
           fontStyle: "bold",
         })
         .setOrigin(0.5, 0),
+
       trayLabel: this.add
         .text(GAME_W / 2, TRAY_Y - 180, "Tahan & seret blok ke grid", {
           fontSize: "40px",
           color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
         })
         .setOrigin(0.5, 0),
-      playerDamage: this.add.text(playerCardX + 18, y + 36, "", {
-        fontSize: "10px",
+
+      playerDamage: this.add.text(playerCardX + CARD_W / 2, y + CARD_H / 2, "", {
+        fontSize: "36px",
+        fontStyle: "bold",
         color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
-      }).setOrigin(0.5),
-      enemyDamage: this.add.text(enemyCardX + 18, y + 36, "", {
-        fontSize: "10px",
+        stroke: "#000000",
+        strokeThickness: 5,
+      }).setOrigin(0.5).setDepth(21).setAlpha(0),
+
+      enemyDamage: this.add.text(enemyCardX + CARD_W / 2, y + CARD_H / 2, "", {
+        fontSize: "36px",
+        fontStyle: "bold",
         color: `#${COLORS.error.toString(16).padStart(6, '0')}`,
-      }).setOrigin(0.5),
+        stroke: "#000000",
+        strokeThickness: 5,
+      }).setOrigin(0.5).setDepth(21).setAlpha(0),
     };
+
+    this._updateKillCountText();
 
     this.msgText = this.add
       .text(
         GAME_W / 2,
-        GAME_H - 12,
+        GAME_H - 45,
         "Tahan blok dari bawah lalu seret ke grid.",
         {
-          fontSize: "40px",
+          fontSize: "36px",
           color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`,
-          wordWrap: { width: GAME_W - 20 },
+          wordWrap: { width: GAME_W - 40 },
           align: "center",
         },
       )
@@ -243,6 +240,14 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0)
       .setDepth(10);
+  }
+
+  _updateKillCountText() {
+    if (this.mode === 'campaign' && this.levelData) {
+      this.hudTexts.killCount.setText(`Level ${this.currentLevel + 1}: ${this.levelData.name}`);
+    } else {
+      this.hudTexts.killCount.setText(`Kills: ${this.killCount}`);
+    }
   }
 
   _initInput() {
@@ -278,18 +283,90 @@ export class GameScene extends Phaser.Scene {
   _spawnNextEnemy() {
     this.enemyIndex = (this.enemyIndex + 1) % this.enemyKeys.length;
     this.enemy = this._createEnemy(this.enemyKeys[this.enemyIndex]);
-    this._startEnemyTimer();
-    this.hudTexts.enemyName.setText(this.enemy.name);
     this.drawHUD();
     this._startEnemyTimer();
   }
 
-  _onEnemyDefeated() {
+  _onEnemyDefeated() 
+  {
+    // Stop serangan musuh lama
+    if (this.enemyTimer) {
+      this.enemyTimer.remove();
+    }
+
+    if (this.mode === "campaign") {
+      this.isPaused = true;
+      this.gameOver = true;
+
+      // Update progress
+      const currentProgress = localStorage.getItem("knightblock_campaign_progress");
+      const unlocked = currentProgress ? parseInt(currentProgress) : 1;
+      const finishedLevelNum = this.currentLevel + 1;
+      if (finishedLevelNum === unlocked) {
+        localStorage.setItem("knightblock_campaign_progress", (unlocked + 1).toString());
+      }
+
+      // Transition effect
+      const overlay = this.add.graphics().setDepth(99).setAlpha(0);
+      overlay.fillStyle(0x000000, 1);
+      overlay.fillRect(0, 0, GAME_W, GAME_H);
+      this.tweens.add({ targets: overlay, alpha: 0.55, duration: 400 });
+
+      const winText = this.add.text(GAME_W / 2, GAME_H / 2, "STAGE CLEARED!", {
+        fontSize: "72px",
+        fontStyle: "bold",
+        color: "#4ade80",
+        stroke: "#000",
+        strokeThickness: 8,
+      }).setOrigin(0.5).setDepth(100).setScale(0.5);
+
+      this.tweens.add({
+        targets: winText,
+        scale: 1,
+        duration: 500,
+        ease: "Back.easeOut",
+        onComplete: () => {
+          this.time.delayedCall(1000, () => {
+            winText.destroy();
+            overlay.destroy();
+            this._endGame(true, "Level Selesai!");
+          });
+        }
+      });
+      return;
+    }
+
+    // Endless mode: spawn next enemy with transition animation
     this.killCount += 1;
-    this.hudTexts.killCount.setText(`Kills: ${this.killCount}`);
+    this._updateKillCountText();
     this._setMsg(`${this.enemy.name} kalah! Musuh baru datang...`);
-    this.time.delayedCall(800, () => {
-      this._spawnNextEnemy();
+
+    // Fade out enemy card
+    this.tweens.add({
+      targets: [
+        this.enemyCard.graphics,
+        this.enemyCard.avatar,
+        this.enemyCard.nameText,
+        this.enemyCard.hpText,
+        this.enemyCard.damageText
+      ],
+      alpha: 0,
+      duration: 400,
+      onComplete: () => {
+        this._spawnNextEnemy();
+        // Fade in new enemy card
+        this.tweens.add({
+          targets: [
+            this.enemyCard.graphics,
+            this.enemyCard.avatar,
+            this.enemyCard.nameText,
+            this.enemyCard.hpText,
+            this.enemyCard.damageText
+          ],
+          alpha: 1,
+          duration: 400
+        });
+      }
     });
   }
 
@@ -347,33 +424,26 @@ export class GameScene extends Phaser.Scene {
   // ── Draw: HUD ──────────────────────────────────────────────────────────────
 
   drawHUD() {
+    this.playerCard.render(this.player.currentHP, this.player.maxHP);
+    this.enemyCard.render(this.enemy.currentHP, this.enemy.maxHP);
+
+    this.playerCard.setName(this.player.name);
+    this.enemyCard.setName(this.enemy.name);
+
+    const enemyIcons = {
+      goblin: "👹",
+      orc: "💀",
+      skeleton: "☠️",
+      slime: "🟢",
+      dragon: "🐉",
+      Undead: "🧟",
+      DuskSkeleton: "💀",
+    };
+    this.enemyCard.setIcon(enemyIcons[this.enemyKeys[this.enemyIndex]] || "👾");
+
+    // Cooldown bar combo
     const g = this.uiGfx;
-    const y = HUD_CARD_Y;
-    const barY = y + 42;
-    const barH = 8;
-    const barW = CARD_W - 54;
-    const bx1 = 50;
-    const bx2 = GAME_W / 2 + 48;
     g.clear();
-
-    const leftX = GRID_X - 6;
-    const rightX = GAME_W - GRID_X - CARD_W + 6;
-
-    g.fillStyle(COLORS.surface);
-    g.lineStyle(2, COLORS.primary);
-    g.fillRoundedRect(10, y, CARD_W - 6, CARD_H, 12);
-    g.strokeRoundedRect(8, y, CARD_W, CARD_H, 8);
-    g.lineStyle(2, COLORS.danger);
-    g.fillRoundedRect(GAME_W / 2 + 4, y, CARD_W - 6, CARD_H, 12);
-    g.strokeRoundedRect(GAME_W / 2 + 6, y, CARD_W, CARD_H, 8);
-
-    g.fillStyle(0x1e3a5f);
-    g.fillCircle(28, y + 20, 14);
-    g.fillStyle(0x3a1e1e);
-    g.fillCircle(GAME_W / 2 + 28, y + 20, 14);
-
-    drawHealthBar(g, bx1, barY, barW, barH, this.player.currentHP, this.player.maxHP);
-    drawHealthBar(g, bx2, barY, barW, barH, this.enemy.currentHP, this.enemy.maxHP);
 
     if (this.comboTimer && this.comboCount > 0) {
       const cooldownWidth = 160;
@@ -383,12 +453,12 @@ export class GameScene extends Phaser.Scene {
       const elapsed = this.time.now - this.comboCooldownStarted;
       const remaining = Phaser.Math.Clamp(1 - elapsed / this.comboCooldown, 0, 1);
 
-      this.uiGfx.fillStyle(0x1e2345);
-      this.uiGfx.fillRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
-      this.uiGfx.fillStyle(COLORS.textAccent);
-      this.uiGfx.fillRoundedRect(cooldownX, cooldownY, cooldownWidth * remaining, cooldownHeight, 5);
-      this.uiGfx.lineStyle(1, COLORS.surfaceBorder, 0.8);
-      this.uiGfx.strokeRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
+      g.fillStyle(0x1e2345);
+      g.fillRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
+      g.fillStyle(COLORS.textAccent);
+      g.fillRoundedRect(cooldownX, cooldownY, cooldownWidth * remaining, cooldownHeight, 5);
+      g.lineStyle(1, COLORS.surfaceBorder, 0.8);
+      g.strokeRoundedRect(cooldownX, cooldownY, cooldownWidth, cooldownHeight, 5);
     }
   }
 
@@ -401,7 +471,8 @@ export class GameScene extends Phaser.Scene {
       for (let c = 0; c < COLS; c++) {
         const x = GRID_X + c * (CELL + GAP);
         const y = GRID_Y + r * (CELL + GAP);
-        const cell = this.grid[r][c];
+        const tile = this.grid[r][c];
+        const cell = tile;
         let color = null;
 
         if (cell !== null) {
@@ -417,6 +488,11 @@ export class GameScene extends Phaser.Scene {
           g.fillRoundedRect(x, y, CELL, CELL, 4);
           g.fillStyle(COLORS.cellHighlight, 0.18);
           g.fillRoundedRect(x + 3, y + 3, CELL - 6, CELL - 6, 5, 2);
+          if (tile && typeof tile === "object" && tile.type === "health") {
+            g.fillStyle(0xffffff, 0.95);
+            g.fillRoundedRect(x + CELL / 2 - 4, y + CELL / 2 - 16, 8, 32, 3);
+            g.fillRoundedRect(x + CELL / 2 - 16, y + CELL / 2 - 4, 32, 8, 3);
+          }
         } else {
           g.fillStyle(COLORS.cellEmpty);
           g.fillRoundedRect(x, y, CELL, CELL, 4);
@@ -429,6 +505,16 @@ export class GameScene extends Phaser.Scene {
 
   // ── Draw: Tray ─────────────────────────────────────────────────────────────
 
+  _createTrayPiece() {
+    const isHealth = Math.random() < SPECIAL_BLOCK_CHANCE;
+    return {
+      shape: randShape(),
+      color: isHealth ? HEALTH_BLOCK_COLOR : randPieceColor(),
+      type: isHealth ? "health" : "normal",
+      used: false,
+    };
+  }
+
   spawnTray() {
     this.trayPieces = [0, 1, 2].map((slotIndex) => {
       if (
@@ -439,14 +525,11 @@ export class GameScene extends Phaser.Scene {
         return {
           shape: PIECES[this.debugSelectedIndex],
           color: this._getDebugPieceColor(),
+          type: "normal",
           used: false,
         };
       }
-      return {
-        shape: randShape(),
-        color: randPieceColor(), // ← satu warna solid per piece
-        used: false,
-      };
+      return this._createTrayPiece();
     });
   }
 
@@ -477,6 +560,14 @@ export class GameScene extends Phaser.Scene {
           g.fillRoundedRect(cx + 1, cy + 1, SMALL - 2, 3, 1);
         });
       });
+
+      if (p.type === "health") {
+        const plusX = slotCX;
+        const plusY = TRAY_Y - 24;
+        g.fillStyle(0xffffff, 0.9 * alpha);
+        g.fillRoundedRect(plusX - 4, plusY - 16, 8, 32, 3);
+        g.fillRoundedRect(plusX - 16, plusY - 4, 32, 8, 3);
+      }
     });
   }
 
@@ -694,7 +785,12 @@ export class GameScene extends Phaser.Scene {
     // Stamp piece ke grid dengan warna solid piece tersebut
     p.shape.forEach((row, dr) => {
       row.forEach((cell, dc) => {
-        if (cell) this.grid[gr + dr][gc + dc] = p.color;
+        if (cell) {
+          this.grid[gr + dr][gc + dc] = {
+            color: p.color,
+            type: p.type || "normal",
+          };
+        }
       });
     });
 
@@ -727,14 +823,30 @@ export class GameScene extends Phaser.Scene {
 
     this.isClearing = true;
     this._flashLines(fullRows, fullCols, () => {
+      const healData = this._resolveHealthClear(fullRows, fullCols);
+      if (healData.totalHeal > 0) {
+        this._spawnHealParticlesFromCoords(healData.coords);
+      }
       clearLines(this.grid, fullRows, fullCols);
+      if (healData.extraClearCoords) {
+        healData.extraClearCoords.forEach(({ r, c }) => {
+          if (this.grid[r][c] && this.grid[r][c].type === "health") {
+            this.grid[r][c] = null;
+          }
+        });
+      }
+      // satisfying visual + tactile feedback for clears
       this._playSatisfyingEffect(fullRows, fullCols, total);
       this.drawGrid();
-      const dmg = calcDamage(total);
-      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - dmg);
+      if (healData.totalHeal > 0) {
+        this.player.currentHP = Math.min(this.player.maxHP, this.player.currentHP + healData.totalHeal);
+        this.drawHUD();
+        this.showHeal(healData.totalHeal, healData.coords);
+      }
+      const effectiveDmg = this._recordCombo(total);
+      this.enemy.currentHP = Math.max(0, this.enemy.currentHP - effectiveDmg);
       this.drawHUD();
       this.showDamage('enemy', effectiveDmg);
-      this._recordCombo(total, dmg);
       this._showCombo(total, effectiveDmg);
       this.isClearing = false;
       if (this.enemy.currentHP <= 0) this._onEnemyDefeated();
@@ -1054,9 +1166,22 @@ export class GameScene extends Phaser.Scene {
     this.drawHUD();
     this.showDamage('player', dmg);
     this.cameras.main.shake(180, 0.012 + dmg * 0.0005);
+    this._triggerVibration();
     this._playPlayerHitEffect(dmg);
 
     if (this.player.currentHP <= 0) this._endGame(false, "HP habis!");
+  }
+
+  async _triggerVibration() {
+    try {
+      if (window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        await Haptics.vibrate({ duration: 200 });
+      } else if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+    } catch (e) {
+      console.warn("Haptics/Vibration not supported or failed:", e);
+    }
   }
 
   _endGame(won, reason = "") {
@@ -1067,17 +1192,108 @@ export class GameScene extends Phaser.Scene {
     overlay.fillStyle(COLORS.overlay, 0.72);
     overlay.fillRect(0, 0, GAME_W, GAME_H);
 
+    if (this.mode === "campaign") {
+      const titleText = won ? "Level Selesai! 🎉" : "Ksatria Gugur... 💀";
+      const descText = won ? "Monster telah dibersihkan." : "Kembali dan perkuat strategimu.";
+      
+      this.add.text(GAME_W / 2, GAME_H / 2 - 100, titleText, {
+        fontSize: "64px",
+        fontStyle: "bold",
+        color: won ? `#${COLORS.success.toString(16).padStart(6, '0')}` : `#${COLORS.error.toString(16).padStart(6, '0')}`,
+        stroke: "#000000",
+        strokeThickness: 6,
+      }).setOrigin(0.5).setDepth(21);
+
+      this.add.text(GAME_W / 2, GAME_H / 2 - 20, descText, {
+        fontSize: "32px",
+        color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}`
+      }).setOrigin(0.5).setDepth(21);
+
+      if (won) {
+        const hasNext = this.currentLevel + 1 < CAMPAIGN_LEVELS.length;
+        if (hasNext) {
+          createButton(
+            this,
+            GAME_W / 2 - 220,
+            GAME_H / 2 + 120,
+            380,
+            90,
+            "🎮 Next Level",
+            COLORS.success,
+            () => {
+              const nextLvlIndex = this.currentLevel + 1;
+              this.scene.start("GameScene", {
+                mode: "campaign",
+                level: nextLvlIndex,
+                levelData: CAMPAIGN_LEVELS[nextLvlIndex]
+              });
+            },
+            { depth: 22, fontSize: "32px" }
+          );
+
+          createButton(
+            this,
+            GAME_W / 2 + 220,
+            GAME_H / 2 + 120,
+            380,
+            90,
+            "🗺️ Campaign Map",
+            COLORS.primary,
+            () => this.scene.start("CampaignScene"),
+            { depth: 22, fontSize: "32px" }
+          );
+        } else {
+          createButton(
+            this,
+            GAME_W / 2,
+            GAME_H / 2 + 120,
+            420,
+            90,
+            "🗺️ Campaign Map",
+            COLORS.primary,
+            () => this.scene.start("CampaignScene"),
+            { depth: 22, fontSize: "32px" }
+          );
+        }
+      } else {
+        createButton(
+          this,
+          GAME_W / 2 - 220,
+          GAME_H / 2 + 120,
+          380,
+          90,
+          "🔄 Coba Lagi",
+          COLORS.warning,
+          () => this.scene.restart(),
+          { depth: 22, fontSize: "32px" }
+        );
+
+        createButton(
+          this,
+          GAME_W / 2 + 220,
+          GAME_H / 2 + 120,
+          380,
+          90,
+          "🗺️ Campaign Map",
+          COLORS.primary,
+          () => this.scene.start("CampaignScene"),
+          { depth: 22, fontSize: "32px" }
+        );
+      }
+      return;
+    }
+
     this.add
       .text(
         GAME_W / 2,
-        GAME_H / 2 - 60,
+        GAME_H / 2 - 120,
         won ? "Kamu Menang! 🎉" : "Game Over 💀",
         {
-          fontSize: "30px",
+          fontSize: "72px",
           fontStyle: "bold",
           color: won ? `#${COLORS.success.toString(16).padStart(6, '0')}` : `#${COLORS.error.toString(16).padStart(6, '0')}`,
           stroke: "#000000",
-          strokeThickness: 4,
+          strokeThickness: 6,
         },
       )
       .setOrigin(0.5)
@@ -1086,9 +1302,9 @@ export class GameScene extends Phaser.Scene {
     this.add
       .text(
         GAME_W / 2,
-        GAME_H / 2 - 20,
+        GAME_H / 2 - 40,
         won ? "Musuh dikalahkan!" : "Kamu gugur...",
-        { fontSize: "15px", color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}` },
+        { fontSize: "36px", color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}` },
       )
       .setOrigin(0.5)
       .setDepth(21);
@@ -1097,9 +1313,9 @@ export class GameScene extends Phaser.Scene {
       this.add
         .text(
           GAME_W / 2,
-          GAME_H / 2 + 15,
+          GAME_H / 2 + 30,
           reason,
-          { fontSize: "12px", color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`, fontStyle: "italic" },
+          { fontSize: "28px", color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`, fontStyle: "italic" },
         )
         .setOrigin(0.5)
         .setDepth(21);
@@ -1108,13 +1324,13 @@ export class GameScene extends Phaser.Scene {
     const { gfx: btnGfx } = createButton(
       this,
       GAME_W / 2,
-      GAME_H / 2 + 83,
-      150,
-      46,
+      GAME_H / 2 + 160,
+      380,
+      90,
       "🔄 Lagi",
       COLORS.primary,
       () => this.scene.restart(),
-      { depth: 22, fontSize: FONT_SIZES.body }
+      { depth: 22, fontSize: "32px" }
     );
   }
 
@@ -1124,13 +1340,201 @@ export class GameScene extends Phaser.Scene {
 
   showDamage(target, dmg) {
     const text = target === 'player' ? this.hudTexts.playerDamage : this.hudTexts.enemyDamage;
-    text.setText(`-${dmg} HP`).setAlpha(1);
+    const targetY = HUD_CARD_Y + CARD_H / 2;
+    text.setStyle({ color: `#${COLORS.error.toString(16).padStart(6, '0')}` });
+    text.setText(`-${dmg} HP`).setAlpha(1).setY(targetY);
     this.tweens.add({
       targets: text,
+      y: targetY - 40,
       alpha: 0,
       duration: 1200,
       ease: 'Power2',
+      onComplete: () => {
+        text.setY(targetY);
+      }
     });
+  }
+
+  showHeal(heal, coords = []) {
+    const text = this.hudTexts.playerDamage;
+    const targetY = HUD_CARD_Y + CARD_H / 2;
+    text.setStyle({ color: `#${HEALTH_BLOCK_COLOR.toString(16).padStart(6, '0')}` });
+    text.setText(`+${heal} HP`).setAlpha(1).setY(targetY);
+    this.tweens.add({
+      targets: text,
+      y: targetY - 40,
+      alpha: 0,
+      duration: 1200,
+      ease: 'Power2',
+      onComplete: () => {
+        text.setY(targetY);
+        text.setStyle({ color: `#${COLORS.error.toString(16).padStart(6, '0')}` });
+      },
+    });
+
+    this.tweens.add({
+      targets: this.playerCard.hpText,
+      scale: 1.15,
+      duration: 120,
+      yoyo: true,
+      ease: 'Power2',
+    });
+
+    // Spawn heal particles centered on player card avatar (x + 50, y + 45)
+    this._spawnHealParticles(10 + 50, HUD_CARD_Y + 45);
+    this._spawnHealLabel(coords, heal);
+  }
+
+  _spawnHealParticles(x, y) {
+    const particles = [];
+    const count = 8;
+    for (let i = 0; i < count; i++) {
+      const particle = this.add.graphics().setDepth(12);
+      particle.fillStyle(0x22c55e, 0.9);
+      particle.fillCircle(0, 0, 4);
+      particle.x = x;
+      particle.y = y;
+      particles.push(particle);
+
+      const angle = Phaser.Math.FloatBetween(-Math.PI * 0.75, -Math.PI * 0.25);
+      const distance = Phaser.Math.Between(40, 80);
+      const targetX = x + Math.cos(angle) * distance;
+      const targetY = y + Math.sin(angle) * distance;
+
+      this.tweens.add({
+        targets: particle,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scale: 0.7,
+        duration: 700,
+        ease: 'Expo.easeOut',
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
+  _spawnHealParticlesFromCoords(coords) {
+    coords.forEach((coord) => {
+      const count = 5;
+      for (let i = 0; i < count; i++) {
+        const particle = this.add.graphics().setDepth(12);
+        particle.fillStyle(HEALTH_BLOCK_COLOR, 0.9);
+        particle.fillCircle(0, 0, 3);
+        particle.x = coord.x;
+        particle.y = coord.y;
+
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const distance = Phaser.Math.Between(15, 40);
+        const targetX = coord.x + Math.cos(angle) * distance;
+        const targetY = coord.y + Math.sin(angle) * distance;
+
+        this.tweens.add({
+          targets: particle,
+          x: targetX,
+          y: targetY,
+          alpha: 0,
+          scale: 0.4,
+          duration: 650,
+          ease: 'Expo.easeOut',
+          onComplete: () => particle.destroy(),
+        });
+      }
+    });
+  }
+
+  _spawnHealLabel(coords, heal) {
+    if (!coords || coords.length === 0) return;
+    const center = coords.reduce(
+      (acc, cur) => ({ x: acc.x + cur.x, y: acc.y + cur.y }),
+      { x: 0, y: 0 },
+    );
+    center.x /= coords.length;
+    center.y /= coords.length;
+
+    const label = this.add
+      .text(center.x, center.y, `+${heal} HP`, {
+        fontSize: '36px',
+        fontStyle: 'bold',
+        color: `#${HEALTH_BLOCK_COLOR.toString(16).padStart(6, '0')}`,
+        stroke: '#000000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(21);
+
+    this.tweens.add({
+      targets: label,
+      y: label.y - 40,
+      alpha: 0,
+      duration: 1000,
+      ease: 'Power2',
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  _resolveHealthClear(fullRows, fullCols) {
+    const healed = new Set();
+    fullRows.forEach((r) => {
+      for (let c = 0; c < COLS; c++) {
+        healed.add(`${r}:${c}`);
+      }
+    });
+    fullCols.forEach((c) => {
+      for (let r = 0; r < ROWS; r++) {
+        healed.add(`${r}:${c}`);
+      }
+    });
+
+    const visited = new Set();
+    const extraClearCoords = [];
+    const coords = [];
+    let totalHeal = 0;
+
+    const collectGroup = (startR, startC) => {
+      const queue = [{ r: startR, c: startC }];
+      visited.add(`${startR}:${startC}`);
+      const group = [];
+
+      while (queue.length > 0) {
+        const { r, c } = queue.shift();
+        group.push({ r, c });
+
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dr, dc]) => {
+          const nr = r + dr;
+          const nc = c + dc;
+          const key = `${nr}:${nc}`;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
+          if (visited.has(key)) return;
+          const neighbor = this.grid[nr][nc];
+          if (neighbor && neighbor.type === "health") {
+            visited.add(key);
+            queue.push({ r: nr, c: nc });
+          }
+        });
+      }
+
+      return group;
+    };
+
+    healed.forEach((coord) => {
+      const [r, c] = coord.split(":").map(Number);
+      const tile = this.grid[r][c];
+      const key = `${r}:${c}`;
+      if (tile && tile.type === "health" && !visited.has(key)) {
+        const group = collectGroup(r, c);
+        totalHeal += group.length * HEALTH_BLOCK_HEAL;
+        group.forEach(({ r: gr, c: gc }) => {
+          extraClearCoords.push({ r: gr, c: gc });
+          coords.push({
+            x: GRID_X + gc * (CELL + GAP) + CELL / 2,
+            y: GRID_Y + gr * (CELL + GAP) + CELL / 2,
+          });
+        });
+      }
+    });
+
+    return { totalHeal, coords, extraClearCoords };
   }
 
   // Check if no blocks can be placed on the grid
@@ -1156,17 +1560,17 @@ export class GameScene extends Phaser.Scene {
   // ── Pause Menu ─────────────────────────────────────────────────────────────
 
   _createSettingsButton() {
-    const btnW = 30;
-    const btnH = 30;
-    const btnX = GAME_W - 20;
-    const btnY = 35;
+    const btnW = 120;
+    const btnH = 120;
+    const btnX = GAME_W - 85;
+    const btnY = 100;
 
     const btnGfx = this.add.graphics().setDepth(15);
     btnGfx.fillStyle(COLORS.primary);
     btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
 
     const btnText = this.add
-      .text(btnX, btnY, "⚙", { fontSize: "24px" })
+      .text(btnX, btnY, "⚙", { fontSize: "64px" })
       .setOrigin(0.5)
       .setDepth(15)
       .setInteractive({ useHandCursor: true });
@@ -1276,8 +1680,8 @@ export class GameScene extends Phaser.Scene {
     g.fillRect(0, 0, GAME_W, GAME_H);
 
     // Menu panel
-    const panelW = 280;
-    const panelH = this.debugMode ? 360 : 300;
+    const panelW = 950;
+    const panelH = 800;
     const panelX = GAME_W / 2 - panelW / 2;
     const panelY = GAME_H / 2 - panelH / 2;
 
@@ -1290,12 +1694,12 @@ export class GameScene extends Phaser.Scene {
     const title = createText(
       this,
       GAME_W / 2,
-      panelY + 25,
+      panelY + 5,
       "⏸ PAUSED",
       {
-        fontSize: FONT_SIZES.subheading,
+        fontSize: "52px",
         color: COLORS.textAccent,
-        fontStyle: 'bold',
+        fontStyle: "bold",
         depth: 31,
       }
     );
@@ -1309,7 +1713,7 @@ export class GameScene extends Phaser.Scene {
         ? `DEBUG: ON — ${this._getDebugPieceDescriptor()}`
         : "DEBUG: OFF",
       {
-        fontSize: FONT_SIZES.caption,
+        fontSize: "24px",
         color: this.debugMode ? COLORS.warning : COLORS.textSecondary,
         depth: 31,
       }
@@ -1318,9 +1722,9 @@ export class GameScene extends Phaser.Scene {
 
     // Menu buttons
     const btnY = panelY + 85;
-    const btnW = 240;
-    const btnH = 40;
-    const btnGap = 50;
+    const btnW = panelW - 80;
+    const btnH = 90;
+    const btnGap = 120;
 
     let row = 0;
     this._createPauseMenuButton(
@@ -1395,7 +1799,11 @@ export class GameScene extends Phaser.Scene {
       COLORS.secondary,
       () => {
         this._closePauseMenu();
-        this.game.destroy(true);
+        if (window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform()) {
+          CapacitorApp.exitApp();
+        } else {
+          this.game.destroy(true);
+        }
       },
     );
   }
@@ -1407,7 +1815,7 @@ export class GameScene extends Phaser.Scene {
 
     const btnText = this.add
       .text(x, y, label, {
-        fontSize: FONT_SIZES.caption,
+        fontSize: "35px",
         fontStyle: "bold",
         color: "#ffffff",
       })

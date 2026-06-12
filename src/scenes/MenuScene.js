@@ -1,5 +1,6 @@
 // ─── MenuScene ────────────────────────────────────────────────────────────────
 import Phaser from "phaser";
+import { App as CapacitorApp } from "@capacitor/app";
 import { GAME_W, GAME_H } from "../config/constants.js";
 import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../ui/UIComponents.js";
 import { showBannerAd, hideBannerAd } from "../admob.js";
@@ -110,7 +111,13 @@ export class MenuScene extends Phaser.Scene {
       btnH,
       "❌ Exit",
       COLORS.danger,
-      () => this.game.destroy(true),
+      () => {
+        if (window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform()) {
+          CapacitorApp.exitApp();
+        } else {
+          this.game.destroy(true);
+        }
+      },
       { depth: 5, fontSize: "50px" }
     );
   }

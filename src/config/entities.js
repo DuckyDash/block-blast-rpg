@@ -1,7 +1,7 @@
 export const PLAYER_STATS = {
   name: "You",
   description: "The hero on the board, fighting to survive every match.",
-  maxHP: 20000,
+  maxHP: 200,
   damageMin: 10,
   damageMax: 14,
 };

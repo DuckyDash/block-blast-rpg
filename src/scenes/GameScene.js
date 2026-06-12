@@ -30,6 +30,8 @@ import {
   clearLines,
 } from "../engine/helpers.js";
 import { COLORS, FONT_SIZES, createButton, createText, drawHealthBar, HUDCard } from "../ui/index.js";
+import { trackEvent } from "../utils/analytics.js";
+import { checkAdSenseImpressions } from "../utils/adTracker.js";
 
 // Powerup feature disabled for the current game mode
 
@@ -88,6 +90,10 @@ export class GameScene extends Phaser.Scene {
     this.spawnTray();
     this.drawTray();
     this._createSettingsButton();
+    trackEvent('game_start', {
+      mode: this.mode,
+      level: this.mode === 'campaign' ? this.currentLevel + 1 : undefined
+    });
   }
 
   update() {
@@ -1187,6 +1193,16 @@ export class GameScene extends Phaser.Scene {
   _endGame(won, reason = "") {
     this.gameOver = true;
     this.enemyTimer.remove();
+
+    checkAdSenseImpressions().then((adViewed) => {
+      trackEvent('game_over', {
+        mode: this.mode,
+        score: this.points,
+        kills: this.killCount,
+        reason: reason || (won ? "Kemenangan" : (this.player.currentHP <= 0 ? "HP habis" : "Tidak ada langkah")),
+        adViewed
+      });
+    });
 
     const overlay = this.add.graphics().setDepth(20);
     overlay.fillStyle(COLORS.overlay, 0.72);

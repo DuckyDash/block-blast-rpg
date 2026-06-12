@@ -1197,8 +1197,10 @@ export class GameScene extends Phaser.Scene {
     checkAdSenseImpressions().then((adViewed) => {
       telemetry.trackEvent("/play", "game_over", {
         mode: this.mode,
+        level: this.mode === "campaign" ? this.currentLevel + 1 : undefined,
         score: this.points,
         kills: this.killCount,
+        won: won,
         reason: reason || (won ? "Kemenangan" : (this.player.currentHP <= 0 ? "HP habis" : "Tidak ada langkah"))
       }, adViewed);
     });

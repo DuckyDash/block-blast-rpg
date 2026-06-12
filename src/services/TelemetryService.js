@@ -11,6 +11,25 @@ class TelemetryService {
       
     this.projectName = "knight-block";
     this.localKey = "knightblock_telemetry_logs";
+    this.sessionId = this._getOrGenerateSessionId();
+  }
+
+  /**
+   * Mengambil atau membuat ID sesi unik untuk sessionStorage
+   * @returns {string}
+   */
+  _getOrGenerateSessionId() {
+    try {
+      if (typeof window === "undefined" || !window.sessionStorage) return "";
+      let sessionId = sessionStorage.getItem("knightblock_analytics_session");
+      if (!sessionId) {
+        sessionId = "sess_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now().toString(36);
+        sessionStorage.setItem("knightblock_analytics_session", sessionId);
+      }
+      return sessionId;
+    } catch (e) {
+      return "sess_" + Date.now().toString(36);
+    }
   }
 
   /**
@@ -45,7 +64,8 @@ class TelemetryService {
       projectName: this.projectName,
       eventName,
       adViewed,
-      metadata
+      metadata,
+      sessionId: this.sessionId
     };
 
     console.log(`[Telemetry] Merekam event: ${eventName}`, payload);

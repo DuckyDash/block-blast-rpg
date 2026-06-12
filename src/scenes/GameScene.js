@@ -1286,14 +1286,14 @@ export class GameScene extends Phaser.Scene {
     this.add
       .text(
         GAME_W / 2,
-        GAME_H / 2 - 60,
+        GAME_H / 2 - 120,
         won ? "Kamu Menang! 🎉" : "Game Over 💀",
         {
-          fontSize: "30px",
+          fontSize: "72px",
           fontStyle: "bold",
           color: won ? `#${COLORS.success.toString(16).padStart(6, '0')}` : `#${COLORS.error.toString(16).padStart(6, '0')}`,
           stroke: "#000000",
-          strokeThickness: 4,
+          strokeThickness: 6,
         },
       )
       .setOrigin(0.5)
@@ -1302,9 +1302,9 @@ export class GameScene extends Phaser.Scene {
     this.add
       .text(
         GAME_W / 2,
-        GAME_H / 2 - 20,
+        GAME_H / 2 - 40,
         won ? "Musuh dikalahkan!" : "Kamu gugur...",
-        { fontSize: "15px", color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}` },
+        { fontSize: "36px", color: `#${COLORS.textSecondary.toString(16).padStart(6, '0')}` },
       )
       .setOrigin(0.5)
       .setDepth(21);
@@ -1313,9 +1313,9 @@ export class GameScene extends Phaser.Scene {
       this.add
         .text(
           GAME_W / 2,
-          GAME_H / 2 + 15,
+          GAME_H / 2 + 30,
           reason,
-          { fontSize: "12px", color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`, fontStyle: "italic" },
+          { fontSize: "28px", color: `#${COLORS.textMuted.toString(16).padStart(6, '0')}`, fontStyle: "italic" },
         )
         .setOrigin(0.5)
         .setDepth(21);
@@ -1324,13 +1324,13 @@ export class GameScene extends Phaser.Scene {
     const { gfx: btnGfx } = createButton(
       this,
       GAME_W / 2,
-      GAME_H / 2 + 83,
-      150,
-      46,
+      GAME_H / 2 + 160,
+      380,
+      90,
       "🔄 Lagi",
       COLORS.primary,
       () => this.scene.restart(),
-      { depth: 22, fontSize: FONT_SIZES.body }
+      { depth: 22, fontSize: "32px" }
     );
   }
 
@@ -1560,17 +1560,17 @@ export class GameScene extends Phaser.Scene {
   // ── Pause Menu ─────────────────────────────────────────────────────────────
 
   _createSettingsButton() {
-    const btnW = 80;
-    const btnH = 80;
-    const btnX = GAME_W - 20;
-    const btnY = 35;
+    const btnW = 120;
+    const btnH = 120;
+    const btnX = GAME_W - 85;
+    const btnY = 100;
 
     const btnGfx = this.add.graphics().setDepth(15);
     btnGfx.fillStyle(COLORS.primary);
     btnGfx.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
 
     const btnText = this.add
-      .text(btnX, btnY, "⚙", { fontSize: "24px" })
+      .text(btnX, btnY, "⚙", { fontSize: "64px" })
       .setOrigin(0.5)
       .setDepth(15)
       .setInteractive({ useHandCursor: true });

@@ -20,3 +20,10 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+# Local Documentation
+PRD.md
+UI_INSPECTION_REPORT.md
+PROJECT_SUMMARY.md
+CHANGES_SUMMARY.md
+

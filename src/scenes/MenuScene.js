@@ -10,11 +10,15 @@ export class MenuScene extends Phaser.Scene {
     super("MenuScene");
   }
 
+  preload() {
+    this.load.image('logo', '/logo.png');
+  }
+
   create() {
     showBannerAd().catch((error) => console.warn('Banner failed to show', error))
     this.events.on('shutdown', () => hideBannerAd().catch(() => {}), this)
     this._drawBackground();
-    this._drawTitle();
+    this._drawLogo();
     this._drawButtons();
     this._drawFooter();
   }
@@ -33,21 +37,10 @@ export class MenuScene extends Phaser.Scene {
     bg.fillCircle(GAME_W * 0.8, GAME_H * 0.85, 100);
   }
 
-  _drawTitle() {
-    // Main title
-    createText(this, GAME_W / 2, 140, "Block Blast RPG", {
-      fontSize: '80px',
-      color: COLORS.textAccent,
-      fontStyle: 'bold',
-      depth: 5,
-    });
-
-    // Subtitle
-    createText(this, GAME_W / 2, 210, "Puzzle Battle RPG", {
-      fontSize: "45px",
-      color: COLORS.textMuted,
-      depth: 5,
-    });
+  _drawLogo() {
+    const logo = this.add.image(GAME_W / 2, 280, 'logo');
+    logo.setDepth(5);
+    logo.setDisplaySize(600, 600);
   }
 
   _drawButtons() {

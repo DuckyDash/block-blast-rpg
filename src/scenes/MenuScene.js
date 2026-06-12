@@ -5,6 +5,7 @@ import { GAME_W, GAME_H } from "../config/constants.js";
 import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../ui/UIComponents.js";
 import { showBannerAd, hideBannerAd } from "../admob.js";
 import { telemetry } from "../services/TelemetryService.js";
+import logoImg from "../../logo.png";
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -12,7 +13,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('logo', '/logo.png');
+    this.load.image('logo', logoImg);
   }
 
   create() {

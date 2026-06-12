@@ -4,6 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { GAME_W, GAME_H } from "../config/constants.js";
 import { COLORS, FONT_SIZES, createButton, createPanel, createText } from "../ui/UIComponents.js";
 import { showBannerAd, hideBannerAd } from "../admob.js";
+import { telemetry } from "../services/TelemetryService.js";
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -21,6 +22,9 @@ export class MenuScene extends Phaser.Scene {
     this._drawLogo();
     this._drawButtons();
     this._drawFooter();
+    
+    // Lacak kunjungan halaman menu utama
+    telemetry.trackEvent("/menu", "page_view");
   }
 
   _drawBackground() {
